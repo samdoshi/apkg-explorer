@@ -1,0 +1,107 @@
+# APKG Explorer
+
+Browser-only viewer for Anki `.apkg` / `.colpkg` files. The spec is in `SPEC.md` (approved).
+Saved-data approvals live in AGENTS.md:
+
+@AGENTS.md
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | Vite dev server |
+| `npm run check` | `tsc --noEmit` (app, test and node configs), ESLint, Vitest. Run after every change. |
+| `npm run check:ui` | Build, then Playwright smoke tests (Chromium) against `vite preview`, then list changed screenshots. Run after each feature and before each commit. |
+| `npm run build` / `npm run preview` | Production build / serve it at http://localhost:4173/apkg-explorer/ |
+| `npx playwright test e2e/smoke.spec.ts` | One spec file (needs a fresh `npm run build` first) |
+
+## Folder layout
+
+```
+src/routes.tsx          every route (hash router)
+src/main.tsx            entry
+src/index.css           Tailwind + shadcn theme (dark mode = prefers-color-scheme)
+src/components/ui/      shadcn components (generated; add with the CLI, below)
+src/lib/                shared helpers
+src/features/<name>/    code grouped by feature (app-shell, open-file, package, notes-table,
+                        card-viewer, mathjax, media)
+e2e/                    Playwright smoke tests; fixtures.ts has the guards, approved-storage.ts the
+                        storage allow-list
+scripts/                Node scripts, written in TypeScript and run directly by Node 24
+fixtures/               generated test decks (committed); fixtures/real/ = the user's real decks
+                        (git-ignored)
+test-results/screens/   screenshots from check:ui (1280x800); test-results/artifacts/ = traces
+.github/workflows/      GitHub Pages deploy (runs npm run check, then builds)
+```
+
+## Environment
+
+- NixOS bubblewrap sandbox. Node 24, npm, git, Python 3 available. Check anything else with
+  `command -v` and ask the user before relying on it. Never install software globally, never use
+  Nix commands, never download binaries.
+- Playwright browsers come from `$PLAYWRIGHT_BROWSERS_PATH` (chromium-1248, which matches
+  `@playwright/test` 1.64.1). Never run `npx playwright install`. If the browser folders change,
+  find the matching version from each playwright-core release's browsers.json and tell the user.
+- `/tmp` is wiped when the sandbox restarts. Keep anything worth keeping in the project.
+- Screenshots for the user: draw them with the kitty graphics protocol by writing to Claude
+  Code's own terminal (`/proc/<claude pid>/fd/1`; `/dev/tty` won't work). Use `q=2`, save and
+  restore the cursor, and clear the image when the user is done.
+
+## Rules
+
+Stack
+- Vite + React + TypeScript (strict). Pure client-side SPA: no server, no SSR, no API routes.
+- React Router hash router, all routes in `src/routes.tsx`.
+- Tailwind CSS + shadcn/ui. Mobile-first, light/dark follows the system, keyboard accessible.
+- Must work in current Chrome, Firefox and Safari, desktop and mobile.
+- Nothing from a CDN or other outside host: every script, stylesheet, font, icon and image comes
+  from npm or the repo and is bundled by Vite. No external `<script>`/`<link>`, import maps,
+  esm.sh or Google Fonts. System fonts only.
+- No API keys in code, no analytics.
+
+Data
+- Save nothing in the browser by default: no localStorage, sessionStorage, IndexedDB, cookies,
+  Cache Storage or OPFS. State lives in React state and is lost on reload, even small things
+  like a theme toggle.
+- If a feature seems to need saved data, stop and ask first (what, where, why). Save only what is
+  approved, record each approval in AGENTS.md and add it to `e2e/approved-storage.ts`.
+- If saved data is approved: IndexedDB via Dexie (versioned schema with migrations, read with
+  `useLiveQuery`), JSON export and import, `navigator.storage.persist()` after the first save.
+- The smoke tests fail if cookies, localStorage, sessionStorage, IndexedDB or Cache Storage
+  hold anything not on the approved list.
+
+Checks
+- `npm run check` after every change; fix failures before reporting back. Never use `any`,
+  `@ts-ignore`/`@ts-expect-error` or `eslint-disable` to silence an error.
+- `npm run check:ui` after each feature and before each commit, not after every edit. Keep it to
+  5-10 Chromium tests covering the main flows. Each fails on any console error or request to
+  another origin (the guard in `e2e/fixtures.ts`). Role and label locators only, no fixed waits.
+- Keep test output small: `--reporter=line`, `--max-failures=1`, traces only on failure
+  (saved under `test-results/artifacts/`).
+- Save screenshots of key screens at 1280x800 to `test-results/screens/`. After a visual change,
+  open only the screenshots that `check:ui` reports as new or changed, preferring element
+  screenshots to full-page ones.
+
+Guardrails
+- npm with exact versions (`save-exact=true` in `.npmrc`). Ask before adding any dependency
+  that isn't on the approved list below.
+- Group code by feature under `src/features/`.
+- Keep this file up to date when commands, layout, environment or rules change.
+- Commit after each feature passes both checks, then stop so the user can try it.
+- GitHub Pages deploy via `.github/workflows/deploy.yml` (runs `npm run check`, then builds).
+  Vite `base` is `/apkg-explorer/`. `check:ui` stays local for now.
+- Later, not now: vite-plugin-pwa for offline use with an "update available" prompt. It caches
+  the app's files in the browser, so it needs the user's OK under the Data rules first.
+- Never push or create the GitHub repo; the user does that.
+
+## Dependencies
+
+Approved but not installed yet (install when the feature needs them, exact versions):
+`@zip.js/zip.js` 2.25.0, `sql.js` 1.16.0, `@types/sql.js` 1.4.11 (dev), `fzstd` 0.1.1,
+`@tanstack/react-table` 8.21.3, `@tanstack/react-virtual` 3.14.26, `@mathjax/src` 4.1.3,
+`jsdom` 31.0.1 (dev).
+
+shadcn: add components with `npx shadcn@4.23.0 add <name>`. The CLI's preset uses the `cn` package
+and `shadcn/tailwind.css` (both approved; `shadcn` is a dev dependency). Its Inter font was
+declined: if the CLI re-adds `@fontsource-variable/inter`, uninstall it and keep system fonts.
+TypeScript stays on 6.0.x because `typescript-eslint` doesn't support 7 yet.

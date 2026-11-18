@@ -1,0 +1,236 @@
+# APKG Explorer — Specification
+
+A browser-only app for looking inside Anki `.apkg` (and `.colpkg`) files. Everything happens on
+the user's device: no server, nothing uploaded, nothing saved in the browser.
+
+Status: **approved 2026-11-18** (including the dependency list, shadcn CLI use, repo name and real-deck location in section 10).
+
+## 1. Opening a file
+
+- Start screen (`#/`): a drop zone plus an "Open file…" button (accepts `.apkg` and `.colpkg`),
+  and a **Try a sample deck** button that loads a synthetic deck bundled with the app.
+- One file at a time. Opening another file replaces the current one and resets all view state.
+- Reloading the page loses the file (nothing is saved). Deep links to other routes without a
+  loaded file go back to the start screen.
+- Errors are shown in plain language: not a zip, no collection inside, unknown/newer format,
+  corrupt database, file changed on disk since it was opened.
+
+### Supported package formats
+
+| Package written by | Collection file | Media map (`media`) | Media files |
+|---|---|---|---|
+| Anki 2.0 / 2.1 legacy export | `collection.anki2` (schema 11) | JSON | plain zip entries |
+| Anki 2.1.x "support older versions" off | `collection.anki21` (schema 11) | JSON | plain zip entries |
+| Anki 2.1.50+ (current) | `collection.anki21b` (zstd, schema 18) | zstd + protobuf | zstd-compressed entries |
+
+The newest collection file present wins (`anki21b` > `anki21` > `anki2`); the `meta` entry is read
+when present. Schema 18 note types, fields, templates and decks are stored as protobuf; the few
+messages we need are decoded by a small hand-written decoder (no protobuf library).
+
+### Memory rules
+
+- The zip is read with random access: only the central directory is read when opening.
+- The collection database is the one thing loaded fully into memory (needed for the table).
+- Media is read **on demand**, one file at a time, only when a card or the media viewer needs it.
+  - Uncompressed ("stored") media entries are handed to the browser as a slice of the original
+    `File` (disk-backed, no copy).
+  - Deflated or zstd-compressed media is decompressed into a single Blob for that file.
+- Object URLs are revoked when the card/preview that used them closes, and a small LRU cache
+  (about 64 MB) caps what is kept between cards.
+- Parsing and database queries run in a Web Worker so the page stays responsive on big decks.
+
+## 2. Main view: notes table (`#/notes/:notetypeId`)
+
+- **One row per note.** The cards a note generates are shown in the popup (section 3).
+- **Note type menu** in the header when the file has more than one note type, showing each
+  type's name and note count. Defaults to the type with the most notes. Hidden when there is
+  only one.
+- **Columns**, in order: each field of the note type (in field order), then Tags, Deck(s),
+  Cards (count), Created, Modified.
+  - Field cells show plain text: HTML stripped, entities decoded, whitespace collapsed, long
+    text truncated with the full text in a tooltip. Images show as an image icon + file name,
+    `[sound:…]` as a speaker icon + file name. Cloze markup is shown as written (like Anki's
+    browser).
+- **Sorting**: every column. Click a header to cycle ascending → descending → off;
+  shift-click adds a secondary sort. Text sorts with a locale-aware, number-aware collator;
+  dates and counts sort numerically.
+- **Per-column filters**, opened from a filter button in each header (popover, works the same
+  on mobile and desktop):
+  - Fields: "contains" text, plus "is empty" / "is not empty".
+  - Tags: pick tags from a searchable checklist; match any or all; "untagged".
+  - Deck: pick decks from a searchable checklist.
+  - Cards: min/max number.
+  - Created / Modified: from/to date.
+  - Active filters appear as removable chips above the table, with "Clear all".
+- **Global search** box at the top: case- and accent-insensitive, every word must match
+  somewhere in the note's fields, tags or deck names.
+- A result count ("1,204 of 5,880 notes") is always visible.
+- Rows are virtualised so tens of thousands of notes scroll smoothly.
+- Mobile: the table scrolls horizontally with the first field column pinned.
+- Keyboard: rows are focusable; ↑/↓ move between rows, Enter opens the popup.
+
+## 3. Card popup (`#/notes/:notetypeId/:noteId`)
+
+Opening a note puts its id in the URL, so the browser Back button (and the Android back gesture)
+closes the popup.
+
+- Dialog on desktop, full screen on mobile. Title is the note's sort field.
+- **Tabs**: one per card the note actually has in the file (template name, or "Cloze 1",
+  "Cloze 2", …), plus a **Note** tab.
+- Each card tab shows **Front** and **Back** side by side (stacked on narrow screens). The back
+  is rendered as Anki renders it, so it normally includes the front via `{{FrontSide}}`.
+  Below them: the card's deck and, if the export included scheduling, due/interval/ease/
+  reviews/lapses.
+- **Note** tab: every field rendered (with media), tags, note id, created/modified dates.
+- **Previous / Next** buttons step through notes in the table's current sort and filter order
+  (also `[` and `]` keys). `Esc` closes.
+- Media in cards: images display; `[sound:…]` becomes an audio player; video plays inline.
+  Nothing autoplays. Unsupported formats (e.g. some `.ogg` on older Safari) show a message
+  and a download link instead.
+- Night mode: when the system is dark, the card body gets Anki's `nightMode night_mode` classes
+  so deck CSS that supports night mode works; otherwise the deck's own colours are kept.
+
+### Template rendering
+
+Implemented: `{{Field}}`, `{{#Field}}…{{/Field}}`, `{{^Field}}…{{/Field}}`, `{{FrontSide}}`,
+`{{cloze:Field}}` (including hints and nested clozes), `{{cloze-only:…}}`, `{{type:Field}}` and
+`{{type:cloze:Field}}` (a disabled input on the front, the expected answer on the back),
+`{{hint:Field}}` (click-to-reveal using `<details>`, so no script needed), `{{text:Field}}`,
+`{{furigana:}}`, `{{kana:}}`, `{{kanji:}}`, and the special fields `Tags`, `Type`, `Deck`,
+`Subdeck`, `Card`, `CardFlag`. `{{tts …}}` shows its text (not spoken). Unknown filters pass the
+field through unchanged. Media referenced from the deck CSS (e.g. `_font.ttf` in `@font-face`)
+is loaded from the package.
+
+### Safety: scripts and web content
+
+Cards render in a sandboxed `<iframe>` with its own Content-Security-Policy.
+
+- **By default**: scripts and inline event handlers are removed before rendering, and any
+  reference to the web (`http(s)://…` in `src`, `href`, `srcset`, CSS `url()`/`@import`) is
+  replaced with a "blocked" placeholder. Only media from the package loads. The iframe sandbox
+  and CSP block anything the clean-up misses.
+- **When detected**, a notice above the card says what was blocked, e.g. "This card has scripts
+  (blocked) — Allow scripts" and "This card loads content from fonts.googleapis.com,
+  example.com (blocked) — Allow web content". The two permissions are separate.
+- A permission applies to the whole open file until the user turns it off, opens another file
+  or reloads. It is never saved.
+- Allowed scripts still run in a sandbox with an opaque origin: they cannot reach the app, the
+  package, or other cards.
+
+### MathJax
+
+`\( … \)` and `\[ … \]` are typeset with MathJax 4, rendered to SVG by the app (so it works with
+scripts off). MathJax and its fonts are bundled locally and loaded only the first time a card
+contains maths. If MathJax 4 can't be bundled fully offline, I'll stop and ask before falling
+back to MathJax 3.
+
+## 4. Media browser (`#/media`)
+
+A second tab in the header, next to Notes.
+
+- Lists every media file in the package: name, kind (image/audio/video/other) and size.
+- Search by name, filter by kind, sort by name/size/kind. Virtualised.
+- Selecting a file opens a preview dialog: image viewer, audio or video player, or "no preview"
+  for other types. Each has a Download button (a normal browser download; nothing is cached).
+- No thumbnails in the list, to keep memory low.
+- SVGs are only ever shown via `<img>`, which doesn't run scripts inside them.
+
+## 5. Layout, theme, accessibility
+
+- Header: file name, note type menu, Notes / Media tabs, "Open another file".
+- Light and dark follow the system (`prefers-color-scheme`). No toggle, because it couldn't be
+  remembered.
+- Keyboard accessible throughout (shadcn/Radix primitives, visible focus, labelled controls).
+- Works in current Chrome, Firefox and Safari, desktop and mobile.
+
+## 6. Out of scope for v1
+
+- Editing, exporting or re-packaging.
+- Image Occlusion note types: the image is shown, but the masks are not drawn.
+- Spoken TTS.
+- Review/study mode, statistics, the revlog.
+- Offline/PWA (planned later; needs a Data-rules approval because it caches app files).
+
+## 7. Technical design
+
+- **Stack**: Vite + React + TypeScript (strict), React Router hash router with every route in
+  `src/routes.tsx`, Tailwind CSS v4 + shadcn/ui, TanStack Table v8 + TanStack Virtual.
+- **Package reading**: `@zip.js/zip.js` (random-access zip from a `File`), `sql.js` (SQLite
+  compiled to WASM, bundled by Vite), `fzstd` (zstd decompression, pure JS).
+- **Folders**:
+  ```
+  src/
+    routes.tsx            all routes
+    main.tsx
+    components/ui/        shadcn components
+    lib/                  shared helpers
+    features/
+      open-file/          start screen, drop zone, sample deck
+      package/            zip, zstd, protobuf, media map, schema 11/18 readers, worker
+      notes-table/        table, filters, global search, note type menu
+      card-viewer/        template renderer, sanitiser, sandboxed iframe, popup
+      mathjax/            lazy MathJax loader
+      media/              media browser and preview
+  scripts/make-fixtures.mjs  builds synthetic test decks
+  fixtures/               generated decks (committed)
+  fixtures/real/          your real exports (git-ignored; tests use them when present)
+  e2e/                    Playwright smoke tests
+  ```
+- **Test decks**: `scripts/make-fixtures.mjs` (Node's built-in `node:sqlite` and `zlib` zstd, so
+  no extra dependencies) builds small decks in all three formats with Basic,
+  Basic-and-reversed, Cloze, type-in and MathJax notes, a generated PNG, SVG, WAV and a short
+  video, a card with a `<script>`, and a card referencing a web image. One becomes the sample
+  deck. Vitest also runs against any files in `fixtures/real/`.
+- **Saved data**: none. No localStorage, sessionStorage, IndexedDB, cookies, Cache Storage or
+  OPFS. A smoke test checks this after running the main flows.
+
+## 8. Checks, CI and deploy
+
+- `npm run check`: `tsc --noEmit`, ESLint (with React Hooks rules), Vitest (unit tests for the
+  readers, protobuf decoder, template renderer, sanitiser, filters; jsdom where DOM APIs are
+  needed).
+- `npm run check:ui`: build, then Playwright (Chromium only) against `vite preview`; 5–10 smoke
+  tests, each failing on any console error or request to another origin; screenshots of key
+  screens at 1280×800 to `test-results/screens/`.
+- GitHub Actions: on push to `main`, run `npm run check`, build, deploy to GitHub Pages.
+  Vite `base` is `/apkg-explorer/`.
+
+## 9. Build order
+
+Each step ends with both checks passing, a commit, and a stop for you to try it.
+
+0. Project setup: scaffold, CLAUDE.md, AGENTS.md, both check scripts, one passing smoke test,
+   Pages workflow.
+1. Fixture generator + package reader for all formats + start screen (open, drop, sample) showing
+   a summary of note types and counts.
+2. Notes table: note type menu, columns, sorting, filters, global search, virtualisation.
+3. Card popup: template rendering, card tabs, front/back, inline media, safety notices,
+   previous/next.
+4. MathJax.
+5. Media browser.
+
+## 10. Needs your OK
+
+1. **Dependencies** (exact versions, latest at the time of writing unless noted):
+   - Runtime: `react` / `react-dom` 19.3.1, `react-router` 8.5.2, `@zip.js/zip.js` 2.25.0,
+     `sql.js` 1.16.0, `fzstd` 0.1.1, `@tanstack/react-table` 8.21.3 (v9 is very new; v8 is the
+     stable line), `@tanstack/react-virtual` 3.14.26, `@mathjax/src` 4.1.3 (brings
+     `@mathjax/mathjax-newcm-font`), `tailwindcss` / `@tailwindcss/vite` 4.3.5, and shadcn's
+     dependencies `radix-ui` 1.8.1, `class-variance-authority` 0.7.1, `cn` 0.5.2,
+     `lucide-react` 1.75.0, `tw-animate-css` 1.4.0, plus `shadcn` 4.23.0 as a dev dependency
+     (for `shadcn/tailwind.css`). _Changed during setup, approved: the shadcn CLI now uses `cn`
+     instead of `clsx` + `tailwind-merge`. Its Inter font was declined in favour of system
+     fonts._
+   - Dev: `vite` 8.3.8, `@vitejs/plugin-react` 6.3.0, `typescript` **6.0.3** (7.x is out, but
+     `typescript-eslint` only supports up to 6.0), `@types/react` / `@types/react-dom` 19.3.0,
+     `@types/sql.js` 1.4.11, `@types/node` 26.6.6, `eslint` 10.15.0, `@eslint/js` 10.0.1,
+     `typescript-eslint` 8.73.0, `eslint-plugin-react-hooks` 7.1.1,
+     `eslint-plugin-react-refresh` 0.5.8, `globals` 17.14.0, `vitest` 5.1.1, `jsdom` 31.0.1,
+     `@playwright/test` 1.64.1 (matches `chromium-1248`).
+2. **shadcn CLI**: OK to run `npx shadcn@4.23.0` to add components? It downloads component
+   source from ui.shadcn.com into `src/components/ui/` and installs only the shadcn dependencies
+   listed above. The alternative is for me to write the components by hand.
+3. **Repo name**: I've assumed the GitHub repo is `apkg-explorer` (so `base` is
+   `/apkg-explorer/`) and the branch is `main` (already renamed from `master`). You'll need to
+   create the repo, push, and set Pages → Source to "GitHub Actions". I won't push anything.
+4. **Real decks**: put them in `fixtures/real/` (git-ignored). Say if you'd rather commit them.
