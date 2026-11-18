@@ -134,8 +134,14 @@ describe.skipIf(realFiles.length === 0)('real packages in fixtures/real', () => 
       expect(noteType.fieldNames.length).toBeGreaterThan(0)
       expect(noteType.templateNames.length).toBeGreaterThan(0)
     }
-    const firstMedia = pkg.mediaFiles()[0]
-    if (firstMedia) expect(await pkg.readMedia(firstMedia.name)).not.toBeNull()
+    // Read a spread of up to 20 media files; each must match the size in the media list.
+    const media = pkg.mediaFiles()
+    const step = Math.max(1, Math.ceil(media.length / 20))
+    for (const file of media.filter((_, index) => index % step === 0)) {
+      const blob = await pkg.readMedia(file.name)
+      expect(blob, file.name).not.toBeNull()
+      if (file.size !== null) expect(blob?.size, file.name).toBe(file.size)
+    }
     pkg.close()
   })
 })
