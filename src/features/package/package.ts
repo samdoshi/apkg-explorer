@@ -8,11 +8,14 @@ import {
   replaceUnicaseCollation,
 } from './collection'
 import { PackageError } from './errors'
+import { htmlToText, type MediaRef } from './html-text'
 import { parseLegacyMediaMap, parseMediaEntries, type MediaFile } from './media-map'
 import { mimeTypeFor } from './mime'
+import type { NoteRow } from './note-row'
 import { ProtoMessage } from './protobuf'
 import { readZipEntries, readZipEntry } from './zip'
 import { hasZstdMagic, zstdToBlob, zstdToBytes } from './zstd'
+import { normalizeForSearch } from '@/lib/search'
 
 export type PackageFormat = 'anki2' | 'anki21' | 'anki21b'
 
@@ -142,6 +145,55 @@ export class AnkiPackage {
         .filter((deck) => deck.cardCount > 0)
         .sort((a, b) => collator.compare(a.name, b.name)),
     }
+  }
+
+  /** Every note of one note type, in creation order, ready for the table. */
+  notes(noteTypeId: number): NoteRow[] {
+    const noteType = readNoteTypes(this.db).find((type) => type.id === noteTypeId)
+    const fieldCount = noteType?.fields.length ?? 0
+    const deckNames = new Map(readDecks(this.db).map((deck) => [deck.id, deck.name]))
+    const rows: NoteRow[] = []
+    const statement = this.db.prepare(
+      `SELECT notes.id, notes.mod, notes.tags, notes.flds,
+              group_concat(DISTINCT cards.did), count(cards.id)
+       FROM notes LEFT JOIN cards ON cards.nid = notes.id
+       WHERE notes.mid = ?
+       GROUP BY notes.id
+       ORDER BY notes.id`,
+    )
+    try {
+      statement.bind([noteTypeId])
+      while (statement.step()) {
+        const [id, mod, tags, flds, deckIds, cardCount] = statement.get()
+        const rawFields = String(flds ?? '').split('\x1f')
+        const fields: string[] = []
+        const media: Record<number, MediaRef[]> = {}
+        for (let index = 0; index < Math.max(fieldCount, rawFields.length); index++) {
+          const { text, media: refs } = htmlToText(rawFields[index] ?? '')
+          fields.push(text)
+          if (refs.length) media[index] = refs
+        }
+        const tagList = String(tags ?? '').split(/\s+/).filter(Boolean)
+        const decks = String(deckIds ?? '')
+          .split(',')
+          .filter(Boolean)
+          .map((deckId) => deckNames.get(Number(deckId)) ?? `Unknown deck ${deckId}`)
+        rows.push({
+          id: Number(id),
+          fields,
+          media,
+          tags: tagList,
+          decks,
+          cardCount: Number(cardCount),
+          created: Number(id),
+          modified: Number(mod) * 1000,
+          search: normalizeForSearch([...fields, ...tagList, ...decks].join('\n')),
+        })
+      }
+    } finally {
+      statement.free()
+    }
+    return rows
   }
 
   mediaFiles(): MediaFile[] {

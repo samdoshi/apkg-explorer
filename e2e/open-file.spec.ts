@@ -7,12 +7,17 @@ import {
   test,
 } from './fixtures.ts'
 
-test('sample deck opens to a summary, and a reload forgets it', async ({ page }) => {
+test('sample deck opens to its notes and overview, and a reload forgets it', async ({ page }) => {
   await page.goto('./')
   await page.getByRole('button', { name: 'Try a sample deck' }).click()
 
+  // Lands on the note type with the most notes.
+  await expect(page).toHaveURL(/#\/notes\/\d+$/)
+  await expect(page.getByRole('heading', { name: 'Basic notes' })).toBeVisible()
+  await expect(page.getByRole('table', { name: 'Basic notes' })).toBeVisible()
+
+  await page.getByRole('navigation', { name: 'Views' }).getByRole('link', { name: 'Overview' }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'sample.apkg' })).toBeVisible()
-  await expect(page).toHaveURL(/#\/notes$/)
   await expect(page.getByText('Anki 2.1.50+ format')).toBeVisible()
   const totals = page.getByRole('list', { name: 'Totals' })
   await expect(totals).toContainText('22 notes')
@@ -28,14 +33,13 @@ test('sample deck opens to a summary, and a reload forgets it', async ({ page })
     'Quiz (shuffled options)',
   ])
   await expect(page.getByRole('region', { name: 'Decks' })).toContainText('Sample::Geography')
-  await saveScreen(page, 'overview')
   await saveScreen(noteTypes, 'overview-note-types')
 
   // The start screen offers a way back while the file is open.
   await page.getByRole('link', { name: 'Open another file' }).click()
   await expect(page.getByText('Open now: sample.apkg')).toBeVisible()
   await page.getByRole('link', { name: 'View notes' }).click()
-  await expect(page.getByRole('heading', { level: 1, name: 'sample.apkg' })).toBeVisible()
+  await expect(page.getByRole('table', { name: 'Basic notes' })).toBeVisible()
 
   // Nothing is saved: a reload starts from scratch.
   await page.reload()
@@ -48,13 +52,13 @@ test('files open from the picker or by dropping, and bad files are explained', a
   await page.goto('./')
 
   await openWithPicker(page, 'legacy-anki2.apkg')
-  await expect(page.getByRole('heading', { level: 1, name: 'legacy-anki2.apkg' })).toBeVisible()
-  await expect(page.getByText('Anki 2.0 format')).toBeVisible()
+  await expect(page.getByRole('table', { name: 'Basic notes' })).toBeVisible()
+  await expect(page.getByRole('banner')).toContainText('legacy-anki2.apkg')
 
   // Dropping a file anywhere replaces the open one.
   await dropFile(page, page.getByRole('main'), 'legacy-anki21.apkg')
-  await expect(page.getByRole('heading', { level: 1, name: 'legacy-anki21.apkg' })).toBeVisible()
-  await expect(page.getByText('Anki 2.1 format')).toBeVisible()
+  await expect(page.getByRole('table', { name: 'Basic (and reversed card) notes' })).toBeVisible()
+  await expect(page.getByRole('banner')).toContainText('legacy-anki21.apkg')
   await expect(page.getByText('Drop to open')).toBeHidden()
 
   await page.getByRole('link', { name: 'Open another file' }).click()

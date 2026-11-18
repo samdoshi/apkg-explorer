@@ -18,6 +18,8 @@
     "node": ">=24"
   },
   "dependencies": {
+    "@tanstack/react-table": "8.21.3",
+    "@tanstack/react-virtual": "3.14.26",
     "@zip.js/zip.js": "2.25.0",
     "class-variance-authority": "0.7.1",
     "cn": "0.5.2",

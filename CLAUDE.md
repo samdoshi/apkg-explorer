@@ -11,7 +11,7 @@ Saved-data approvals live in AGENTS.md:
 |---|---|
 | `npm run dev` | Vite dev server |
 | `npm run check` | `tsc --noEmit` (app, test and node configs), ESLint, Vitest. Run after every change. |
-| `npm run check:ui` | Build, then Playwright smoke tests (Chromium) against `vite preview`, then list changed screenshots. Run after each feature and before each commit. |
+| `npm run check:ui` | Build, then Playwright smoke tests (Chromium) against `vite preview`, then list new, changed and no-longer-produced screenshots. Run after each feature and before each commit. |
 | `npm run build` / `npm run preview` | Production build / serve it at http://localhost:4173/apkg-explorer/ |
 | `npx playwright test e2e/smoke.spec.ts` | One spec file (needs a fresh `npm run build` first) |
 | `npm run fixtures` | Rebuild the synthetic decks in `fixtures/` (`scripts/make_fixtures.py`, deterministic) |
@@ -29,14 +29,18 @@ src/features/<name>/    code grouped by feature:
   open-file/            start screen, file picker, window-wide drag and drop, sample deck
   package/              .apkg reader (zip, zstd, protobuf, media map, schema 11/18), the Web
                         Worker that runs it, PackageClient (main-thread RPC) and React context
-  overview/             interim package summary at #/notes (replaced by notes-table next)
-  (to come: notes-table, card-viewer, mathjax, media)
+  notes-table/          #/notes/:noteTypeId: TanStack Table (sorting only) + TanStack Virtual
+                        rows. Search and column filters are plain functions in filters.ts,
+                        applied before the table sorts. Rows come from the worker
+                        (getNotes -> NoteRow, plain text built by package/html-text.ts)
+  overview/             #/overview: package summary (format, counts, note types, decks)
+  (to come: card-viewer, mathjax, media)
 e2e/                    Playwright smoke tests; fixtures.ts has the guards, approved-storage.ts the
                         storage allow-list
 scripts/                Node scripts in TypeScript (run directly by Node 24); make_fixtures.py
 fixtures/               generated test decks (committed): sample.apkg (current format, also the
                         in-app sample), legacy-anki2.apkg, legacy-anki21.apkg (WAL header),
-                        collection.colpkg, invalid/*. fixtures/real/ = the user's real decks
+                        collection.colpkg, large.apkg (5,000 notes), invalid/*. fixtures/real/ = the user's real decks
                         (git-ignored; Vitest opens each one when present)
 test-results/screens/   screenshots from check:ui (1280x800); test-results/artifacts/ = traces
 .github/workflows/      GitHub Pages deploy (runs npm run check, then builds)
@@ -53,6 +57,8 @@ test-results/screens/   screenshots from check:ui (1280x800); test-results/artif
 - Playwright's Firefox build works here; WebKit does not (it aborts with "Could not create EGL
   display"). `check:ui` is Chromium-only anyway; for a one-off Firefox run, use a temporary config
   that spreads `playwright.config.ts` and swaps `projects`.
+- Tool inputs decode `\uXXXX` sequences, so a `\u0300` written into a file arrives as the
+  literal character. In source, build such characters with `String.fromCodePoint(0x300)`.
 - `/tmp` is wiped when the sandbox restarts. Keep anything worth keeping in the project.
 - Screenshots for the user: draw them with the kitty graphics protocol by writing to Claude
   Code's own terminal (`/proc/<claude pid>/fd/1`; `/dev/tty` won't work). Use `q=2`, save and
@@ -108,8 +114,11 @@ Guardrails
 ## Dependencies
 
 Approved but not installed yet (install when the feature needs them, exact versions):
-`@tanstack/react-table` 8.21.3, `@tanstack/react-virtual` 3.14.26, `@mathjax/src` 4.1.3,
-`jsdom` 31.0.1 (dev).
+`@mathjax/src` 4.1.3, `jsdom` 31.0.1 (dev).
+
+ESLint reports two warnings ("Compilation Skipped: Use of incompatible library") from
+`react-hooks/incompatible-library` for `useReactTable` and `useVirtualizer`. They only matter
+with the React Compiler, which this project doesn't use. Left visible on purpose.
 
 Package reading: `@zip.js/zip.js` (import `@zip.js/zip.js/index-native.js`: native
 DecompressionStream, no zip.js workers or WASM), `sql.js` (the worker loads

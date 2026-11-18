@@ -10,7 +10,7 @@ const formatLabels: Record<PackageFormat, string> = {
   anki2: 'Anki 2.0 format',
 }
 
-/** Interim view: a summary of the open package. The notes table replaces it next. */
+/** #/overview: what's in the open package (format, counts, note types, decks). */
 export function PackageOverview() {
   const { state } = usePackage()
   if (state.status !== 'ready') return null
@@ -88,10 +88,6 @@ function Overview({ summary }: { summary: PackageSummary }) {
           ))}
         </ul>
       </section>
-
-      <p className="text-sm text-muted-foreground">
-        The notes table, with sorting, filters and search, arrives in the next build step.
-      </p>
     </div>
   )
 }

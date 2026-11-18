@@ -21,6 +21,9 @@ const api: PackageApi = {
     current = await AnkiPackage.open(file, file.name, await sqlReady)
     return current.summary()
   },
+  async getNotes(noteTypeId) {
+    return Promise.resolve(requirePackage().notes(noteTypeId))
+  },
   async readMedia(name) {
     return requirePackage().readMedia(name)
   },
@@ -30,6 +33,8 @@ function handle(request: WorkerRequest): Promise<unknown> {
   switch (request.method) {
     case 'open':
       return api.open(...request.args)
+    case 'getNotes':
+      return api.getNotes(...request.args)
     case 'readMedia':
       return api.readMedia(...request.args)
   }

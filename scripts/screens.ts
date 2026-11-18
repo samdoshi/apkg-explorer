@@ -1,9 +1,9 @@
 // Reports which screenshots in test-results/screens/ changed during a test run,
 // so only those need looking at.
-//   node scripts/screens.ts before   # record hashes
-//   node scripts/screens.ts after    # list new / changed / removed screenshots
+//   node scripts/screens.ts before   # record hashes, then clear the old screenshots
+//   node scripts/screens.ts after    # list new / changed / no longer produced screenshots
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const dir = 'test-results/screens'
@@ -21,7 +21,10 @@ function hashes(): Record<string, string> {
 const mode = process.argv[2]
 if (mode === 'before') {
   mkdirSync(dir, { recursive: true })
-  writeFileSync(hashFile, JSON.stringify(hashes()))
+  const previous = hashes()
+  writeFileSync(hashFile, JSON.stringify(previous))
+  // Start empty, so screenshots no test takes any more don't linger.
+  for (const name of Object.keys(previous)) rmSync(join(dir, name))
 } else if (mode === 'after') {
   const before = existsSync(hashFile)
     ? (JSON.parse(readFileSync(hashFile, 'utf8')) as Record<string, string>)
@@ -29,11 +32,13 @@ if (mode === 'before') {
   const after = hashes()
   const added = Object.keys(after).filter((name) => !(name in before))
   const changed = Object.keys(after).filter((name) => name in before && before[name] !== after[name])
+  const removed = Object.keys(before).filter((name) => !(name in after))
   const unchanged = Object.keys(after).length - added.length - changed.length
   const list = (names: string[]) => names.map((name) => join(dir, name)).join(', ')
   console.log(`Screenshots: ${added.length} new, ${changed.length} changed, ${unchanged} unchanged`)
   if (added.length) console.log(`  new: ${list(added)}`)
   if (changed.length) console.log(`  changed: ${list(changed)}`)
+  if (removed.length) console.log(`  no longer produced: ${removed.join(', ')}`)
 } else {
   console.error('Usage: node scripts/screens.ts before|after')
   process.exit(1)

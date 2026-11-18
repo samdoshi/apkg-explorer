@@ -75,6 +75,34 @@ describe('current format (collection.anki21b)', () => {
     pkg.close()
   })
 
+  it('returns table rows for one note type', async () => {
+    const pkg = await open('sample.apkg')
+    const country = pkg.summary().noteTypes.find((t) => t.name === 'Country')
+    const rows = pkg.notes(country?.id ?? 0)
+    expect(rows).toHaveLength(6)
+    const japan = rows.find((row) => row.fields[0] === 'Japan')
+    expect(japan).toMatchObject({
+      fields: ['Japan', 'Tokyo', '', '', ''],
+      media: {
+        2: [{ kind: 'image', name: 'flag-japan.png' }],
+        3: [{ kind: 'audio', name: 'chime-japan.wav' }],
+      },
+      tags: ['geography', 'asia'],
+      decks: ['Sample::Geography'],
+      cardCount: 2,
+    })
+    expect(japan?.search).toContain('tokyo')
+    expect(japan?.search).toContain('sample::geography')
+    expect(japan?.created).toBeGreaterThan(Date.UTC(2024, 0, 1))
+    expect(japan?.modified).toBeGreaterThan(Date.UTC(2024, 0, 1))
+    // HTML and entities become plain text.
+    const basic = pkg.summary().noteTypes.find((t) => t.name === 'Basic')
+    const texts = pkg.notes(basic?.id ?? 0).map((row) => row.fields.join(' | '))
+    expect(texts).toContain('What is the chemical symbol for gold? | Au (from Latin aurum)')
+    expect(texts).toContain('Speed of light in a vacuum? | 299 792 458 m/s')
+    pkg.close()
+  })
+
   it('reads a .colpkg collection package the same way', async () => {
     const pkg = await open('collection.colpkg')
     expect(pkg.summary()).toMatchObject({ format: 'anki21b', noteCount: 3, mediaCount: 1 })
@@ -134,6 +162,10 @@ describe.skipIf(realFiles.length === 0)('real packages in fixtures/real', () => 
       expect(noteType.fieldNames.length).toBeGreaterThan(0)
       expect(noteType.templateNames.length).toBeGreaterThan(0)
     }
+    const biggest = summary.noteTypes.reduce((a, b) => (b.noteCount > a.noteCount ? b : a))
+    const rows = pkg.notes(biggest.id)
+    expect(rows).toHaveLength(biggest.noteCount)
+    expect(rows.every((row) => row.fields.length >= biggest.fieldNames.length)).toBe(true)
     // Read a spread of up to 20 media files; each must match the size in the media list.
     const media = pkg.mediaFiles()
     const step = Math.max(1, Math.ceil(media.length / 20))

@@ -1,4 +1,5 @@
 import { PackageError } from './errors'
+import type { NoteRow } from './note-row'
 import type { PackageSummary } from './package'
 import type { PackageApi, WorkerResponse } from './worker-protocol'
 
@@ -13,7 +14,11 @@ interface Pending {
  * Main-thread handle on one open package. Each package gets its own worker, so
  * disposing the client frees the database and everything else it held.
  */
+let nextClientId = 1
+
 export class PackageClient {
+  /** Distinguishes one opened file from the next, e.g. for React keys. */
+  readonly id = nextClientId++
   private readonly worker: Worker
   private readonly pending = new Map<number, Pending>()
   private nextId = 1
@@ -47,6 +52,10 @@ export class PackageClient {
       client.dispose()
       throw error
     }
+  }
+
+  getNotes(noteTypeId: number): Promise<NoteRow[]> {
+    return this.call('getNotes', noteTypeId)
   }
 
   readMedia(name: string): Promise<Blob | null> {

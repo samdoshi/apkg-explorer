@@ -1,6 +1,7 @@
 import { createHashRouter, Navigate } from 'react-router'
 import { AppLayout } from '@/features/app-shell/app-layout'
 import { RequirePackage } from '@/features/app-shell/require-package'
+import { NotesIndex, NotesPage } from '@/features/notes-table/notes-page'
 import { StartScreen } from '@/features/open-file/start-screen'
 import { PackageOverview } from '@/features/overview/package-overview'
 
@@ -14,7 +15,11 @@ export const router = createHashRouter([
       {
         // Needs an open file; a reload loses it, so these redirect to the start screen.
         element: <RequirePackage />,
-        children: [{ path: 'notes', element: <PackageOverview /> }],
+        children: [
+          { path: 'notes', element: <NotesIndex /> },
+          { path: 'notes/:noteTypeId', element: <NotesPage /> },
+          { path: 'overview', element: <PackageOverview /> },
+        ],
       },
       { path: '*', element: <Navigate to="/" replace /> },
     ],

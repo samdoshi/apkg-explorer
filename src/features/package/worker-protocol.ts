@@ -1,9 +1,11 @@
 import type { PackageErrorInfo } from './errors'
+import type { NoteRow } from './note-row'
 import type { PackageSummary } from './package'
 
 /** What the package worker can do. Each method runs in the worker. */
 export interface PackageApi {
   open(file: File): Promise<PackageSummary>
+  getNotes(noteTypeId: number): Promise<NoteRow[]>
   readMedia(name: string): Promise<Blob | null>
 }
 

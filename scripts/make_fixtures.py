@@ -12,6 +12,7 @@ Packages written (see SPEC.md section 1 for the formats):
   fixtures/legacy-anki2.apkg        Anki 2.0/2.1 legacy: collection.anki2 (schema 11), JSON map
   fixtures/legacy-anki21.apkg       collection.anki21 (schema 11, WAL header) + dummy anki2
   fixtures/collection.colpkg        current format collection package
+  fixtures/large.apkg               current format, 5,000 text-only notes (virtual scrolling)
   fixtures/invalid/*.apkg           files the app must reject with a clear message
 """
 
@@ -663,6 +664,17 @@ def colpkg_package() -> Package:
     return Package([nt_basic], notes, {"water.svg": WATER_SVG})
 
 
+def large_package() -> Package:
+    nt_basic = basic(1_690_000_000_001)
+    decks = ["Large::Part A", "Large::Part B", "Large::Part C"]
+    tags = [["even"], ["odd"]]
+    notes = [
+        Note(nt_basic, [f"Word {i:04d}", f"Meaning number {i}"], decks[i % 3], tags[i % 2])
+        for i in range(1, 5001)
+    ]
+    return Package([nt_basic], notes, {})
+
+
 def write_invalid() -> None:
     folder = OUT / "invalid"
     folder.mkdir(parents=True, exist_ok=True)
@@ -684,6 +696,7 @@ def main() -> None:
     write_legacy(OUT / "legacy-anki2.apkg", legacy_anki2_package(), "collection.anki2")
     write_legacy(OUT / "legacy-anki21.apkg", legacy_anki21_package(), "collection.anki21", wal=True)
     write_latest(OUT / "collection.colpkg", colpkg_package())
+    write_latest(OUT / "large.apkg", large_package())
     write_invalid()
 
 

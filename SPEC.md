@@ -42,9 +42,10 @@ messages we need are decoded by a small hand-written decoder (no protobuf librar
 ## 2. Main view: notes table (`#/notes/:notetypeId`)
 
 - **One row per note.** The cards a note generates are shown in the popup (section 3).
-- **Note type menu** in the header when the file has more than one note type, showing each
-  type's name and note count. Defaults to the type with the most notes. Hidden when there is
-  only one.
+- **Note type menu** at the start of the table's toolbar (just under the header) when the file
+  has more than one note type with notes, showing each type's name and note count. Defaults to
+  the type with the most notes. Note types with no notes are left out. With only one, its name
+  is shown as the heading instead.
 - **Columns**, in order: each field of the note type (in field order), then Tags, Deck(s),
   Cards (count), Created, Modified.
   - Field cells show plain text: HTML stripped, entities decoded, whitespace collapsed, long
@@ -67,7 +68,8 @@ messages we need are decoded by a small hand-written decoder (no protobuf librar
 - A result count ("1,204 of 5,880 notes") is always visible.
 - Rows are virtualised so tens of thousands of notes scroll smoothly.
 - Mobile: the table scrolls horizontally with the first field column pinned.
-- Keyboard: rows are focusable; ↑/↓ move between rows, Enter opens the popup.
+- Keyboard: rows are focusable; ↑/↓, Page Up/Down, Home and End move between rows, Enter
+  opens the popup (step 3).
 
 ## 3. Card popup (`#/notes/:notetypeId/:noteId`)
 
@@ -137,7 +139,9 @@ A second tab in the header, next to Notes.
 
 ## 5. Layout, theme, accessibility
 
-- Header: file name, note type menu, Notes / Media tabs, "Open another file".
+- Header: Notes / Overview (and later Media) links, file name, "Open another file".
+  _Overview (`#/overview`) keeps the package summary from step 1: format, counts, note types
+  with their fields and card types, and decks._
 - Light and dark follow the system (`prefers-color-scheme`). No toggle, because it couldn't be
   remembered.
 - Keyboard accessible throughout (shadcn/Radix primitives, visible focus, labelled controls).
