@@ -1,4 +1,6 @@
-import { test as base, expect, type Page } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { test as base, expect, type Locator, type Page } from '@playwright/test'
 import { approvedStorage } from './approved-storage.ts'
 
 /**
@@ -63,4 +65,41 @@ export async function expectOnlyApprovedStorage(page: Page) {
   })
 }
 
-export const screenPath = (name: string) => `test-results/screens/${name}.png`
+/**
+ * Saves a screenshot of a key screen (a Page) or element (a Locator) to
+ * test-results/screens/<name>.png. Animations are stopped so unchanged screens
+ * produce identical files, which keeps the "changed screenshots" report honest.
+ */
+export async function saveScreen(target: Page | Locator, name: string) {
+  await target.screenshot({
+    path: `test-results/screens/${name}.png`,
+    animations: 'disabled',
+    caret: 'hide',
+  })
+}
+
+/** Absolute path of a generated test deck in fixtures/. */
+export const fixturePath = (name: string) => join(import.meta.dirname, '..', 'fixtures', name)
+
+/** Opens a fixture through the "Open file…" button and the browser's file chooser. */
+export async function openWithPicker(page: Page, name: string) {
+  const chooser = page.waitForEvent('filechooser')
+  await page.getByRole('button', { name: 'Open file…' }).click()
+  await (await chooser).setFiles(fixturePath(name))
+}
+
+/** Drags a fixture file over `target` and drops it, as if from the desktop. */
+export async function dropFile(page: Page, target: Locator, name: string) {
+  const bytes = [...(await readFile(fixturePath(name)))]
+  const dataTransfer = await page.evaluateHandle(
+    ({ bytes, name }) => {
+      const transfer = new DataTransfer()
+      transfer.items.add(new File([new Uint8Array(bytes)], name))
+      return transfer
+    },
+    { bytes, name },
+  )
+  await target.dispatchEvent('dragenter', { dataTransfer })
+  await expect(page.getByText('Drop to open')).toBeVisible()
+  await target.dispatchEvent('drop', { dataTransfer })
+}

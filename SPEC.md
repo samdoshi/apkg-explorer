@@ -171,16 +171,22 @@ A second tab in the header, next to Notes.
       card-viewer/        template renderer, sanitiser, sandboxed iframe, popup
       mathjax/            lazy MathJax loader
       media/              media browser and preview
-  scripts/make-fixtures.mjs  builds synthetic test decks
+  scripts/make_fixtures.py   builds synthetic test decks (npm run fixtures)
   fixtures/               generated decks (committed)
   fixtures/real/          your real exports (git-ignored; tests use them when present)
   e2e/                    Playwright smoke tests
   ```
-- **Test decks**: `scripts/make-fixtures.mjs` (Node's built-in `node:sqlite` and `zlib` zstd, so
-  no extra dependencies) builds small decks in all three formats with Basic,
-  Basic-and-reversed, Cloze, type-in and MathJax notes, a generated PNG, SVG, WAV and a short
-  video, a card with a `<script>`, and a card referencing a web image. One becomes the sample
-  deck. Vitest also runs against any files in `fixtures/real/`.
+- **Test decks**: `scripts/make_fixtures.py` (Python standard library only: `sqlite3`, `zipfile`,
+  `compression.zstd`) builds small decks in all three formats with Basic, Basic-and-reversed,
+  Cloze, type-in, MathJax and custom notes, generated PNG flags, SVGs and WAV chimes, a card
+  with a `<script>`, a card referencing a web image and one referencing a missing file. Output
+  is deterministic. `fixtures/sample.apkg` is also the in-app sample deck. Vitest also runs
+  against any files in `fixtures/real/`. _Changed from the Node script first planned: Python's
+  sqlite3 can register Anki's `unicase` collation, so the fixtures use Anki's real schema 18
+  DDL, and its zipfile module mirrors Anki's legacy Python exporter._
+- **Anki's `unicase` collation**: schema 18 declares names with a custom collation that sql.js
+  can't register, and SQLite then refuses to read the WITHOUT ROWID `fields`/`templates`/`tags`
+  tables. After loading, the reader rewrites its in-memory copy of the schema to `NOCASE`.
 - **Saved data**: none. No localStorage, sessionStorage, IndexedDB, cookies, Cache Storage or
   OPFS. A smoke test checks this after running the main flows.
 

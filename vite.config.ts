@@ -10,6 +10,7 @@ export default defineConfig({
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
+  worker: { format: 'es' },
   preview: { port: 4173, strictPort: true },
   test: {
     include: ['src/**/*.test.{ts,tsx}'],

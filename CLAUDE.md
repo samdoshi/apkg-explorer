@@ -14,6 +14,7 @@ Saved-data approvals live in AGENTS.md:
 | `npm run check:ui` | Build, then Playwright smoke tests (Chromium) against `vite preview`, then list changed screenshots. Run after each feature and before each commit. |
 | `npm run build` / `npm run preview` | Production build / serve it at http://localhost:4173/apkg-explorer/ |
 | `npx playwright test e2e/smoke.spec.ts` | One spec file (needs a fresh `npm run build` first) |
+| `npm run fixtures` | Rebuild the synthetic decks in `fixtures/` (`scripts/make_fixtures.py`, deterministic) |
 
 ## Folder layout
 
@@ -23,13 +24,20 @@ src/main.tsx            entry
 src/index.css           Tailwind + shadcn theme (dark mode = prefers-color-scheme)
 src/components/ui/      shadcn components (generated; add with the CLI, below)
 src/lib/                shared helpers
-src/features/<name>/    code grouped by feature (app-shell, open-file, package, notes-table,
-                        card-viewer, mathjax, media)
+src/features/<name>/    code grouped by feature:
+  app-shell/            layout, header, drop overlay, RequirePackage route guard
+  open-file/            start screen, file picker, window-wide drag and drop, sample deck
+  package/              .apkg reader (zip, zstd, protobuf, media map, schema 11/18), the Web
+                        Worker that runs it, PackageClient (main-thread RPC) and React context
+  overview/             interim package summary at #/notes (replaced by notes-table next)
+  (to come: notes-table, card-viewer, mathjax, media)
 e2e/                    Playwright smoke tests; fixtures.ts has the guards, approved-storage.ts the
                         storage allow-list
-scripts/                Node scripts, written in TypeScript and run directly by Node 24
-fixtures/               generated test decks (committed); fixtures/real/ = the user's real decks
-                        (git-ignored)
+scripts/                Node scripts in TypeScript (run directly by Node 24); make_fixtures.py
+fixtures/               generated test decks (committed): sample.apkg (current format, also the
+                        in-app sample), legacy-anki2.apkg, legacy-anki21.apkg (WAL header),
+                        collection.colpkg, invalid/*. fixtures/real/ = the user's real decks
+                        (git-ignored; Vitest opens each one when present)
 test-results/screens/   screenshots from check:ui (1280x800); test-results/artifacts/ = traces
 .github/workflows/      GitHub Pages deploy (runs npm run check, then builds)
 ```
@@ -42,6 +50,9 @@ test-results/screens/   screenshots from check:ui (1280x800); test-results/artif
 - Playwright browsers come from `$PLAYWRIGHT_BROWSERS_PATH` (chromium-1248, which matches
   `@playwright/test` 1.64.1). Never run `npx playwright install`. If the browser folders change,
   find the matching version from each playwright-core release's browsers.json and tell the user.
+- Playwright's Firefox build works here; WebKit does not (it aborts with "Could not create EGL
+  display"). `check:ui` is Chromium-only anyway; for a one-off Firefox run, use a temporary config
+  that spreads `playwright.config.ts` and swaps `projects`.
 - `/tmp` is wiped when the sandbox restarts. Keep anything worth keeping in the project.
 - Screenshots for the user: draw them with the kitty graphics protocol by writing to Claude
   Code's own terminal (`/proc/<claude pid>/fd/1`; `/dev/tty` won't work). Use `q=2`, save and
@@ -97,9 +108,12 @@ Guardrails
 ## Dependencies
 
 Approved but not installed yet (install when the feature needs them, exact versions):
-`@zip.js/zip.js` 2.25.0, `sql.js` 1.16.0, `@types/sql.js` 1.4.11 (dev), `fzstd` 0.1.1,
 `@tanstack/react-table` 8.21.3, `@tanstack/react-virtual` 3.14.26, `@mathjax/src` 4.1.3,
 `jsdom` 31.0.1 (dev).
+
+Package reading: `@zip.js/zip.js` (import `@zip.js/zip.js/index-native.js`: native
+DecompressionStream, no zip.js workers or WASM), `sql.js` (the worker loads
+`sql-wasm-browser.wasm` via `?url`; Vitest uses the Node build), `fzstd` (streaming zstd).
 
 shadcn: add components with `npx shadcn@4.23.0 add <name>`. The CLI's preset uses the `cn` package
 and `shadcn/tailwind.css` (both approved; `shadcn` is a dev dependency). Its Inter font was
