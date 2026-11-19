@@ -56,12 +56,12 @@ describe('current format (collection.anki21b)', () => {
 
   it('lists media and decompresses files on demand', async () => {
     const pkg = await open('sample.apkg')
-    expect(pkg.summary().mediaCount).toBe(17)
+    expect(pkg.summary().mediaCount).toBe(19)
     const flag = pkg.mediaFiles().find((m) => m.name === 'flag-japan.png')
     expect(flag?.size).toBeGreaterThan(100)
     // The media browser's list: names and sizes only.
     const list = pkg.mediaList()
-    expect(list).toHaveLength(17)
+    expect(list).toHaveLength(19)
     expect(list.find((m) => m.name === 'flag-japan.png')).toEqual({ name: 'flag-japan.png', size: flag?.size })
 
     const png = await pkg.readMedia('flag-japan.png')
@@ -78,6 +78,10 @@ describe('current format (collection.anki21b)', () => {
     const webm = await pkg.readMedia('mandelbrot.webm')
     expect(webm?.type).toBe('video/webm')
     expect([...(await bytesOf(webm)).subarray(0, 4)]).toEqual([0x1a, 0x45, 0xdf, 0xa3])
+    // The font (a TrueType file starts with version 1.0).
+    const font = await pkg.readMedia('_pixel.ttf')
+    expect(font?.type).toBe('font/ttf')
+    expect([...(await bytesOf(font)).subarray(0, 4)]).toEqual([0, 1, 0, 0])
 
     expect(await pkg.readMedia('missing-picture.png')).toBeNull()
     // Percent-encoded names in the HTML find the file too.

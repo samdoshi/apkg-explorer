@@ -31,7 +31,9 @@ const types: Record<string, string> = {
   mpg: 'video/mpeg',
   ogv: 'video/ogg',
   webm: 'video/webm',
+  otc: 'font/collection',
   otf: 'font/otf',
+  ttc: 'font/collection',
   ttf: 'font/ttf',
   woff: 'font/woff',
   woff2: 'font/woff2',
@@ -42,7 +44,7 @@ const types: Record<string, string> = {
   txt: 'text/plain',
 }
 
-export type MediaKind = 'image' | 'audio' | 'video' | 'other'
+export type MediaKind = 'image' | 'audio' | 'video' | 'font' | 'other'
 
 export function mimeTypeFor(fileName: string): string {
   const extension = fileName.slice(fileName.lastIndexOf('.') + 1).toLowerCase()
@@ -54,5 +56,6 @@ export function mediaKindFor(fileName: string): MediaKind {
   if (type.startsWith('image/')) return 'image'
   if (type.startsWith('audio/')) return 'audio'
   if (type.startsWith('video/')) return 'video'
+  if (type.startsWith('font/')) return 'font'
   return 'other'
 }

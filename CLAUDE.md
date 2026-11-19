@@ -44,7 +44,9 @@ src/features/<name>/    code grouped by feature:
                         frame documents: every frame has allow-scripts and an opaque origin and
                         starts with a loader; blocked scripts are stopped by the CSP (only the
                         loader's nonce runs). Don't add allow-same-origin or drop allow-scripts
-                        (Safari's media controls are JavaScript).
+                        (Safari's media controls are JavaScript). Package stylesheets (@import,
+                        <link>) are read by use-content-scan.ts, cleaned, and sent as text the
+                        loader fills in, so their fonts load.
                         Media blobs come from package/media-cache.ts (64 MB LRU, on the client)
   mathjax/              find-math.ts = where MathJax would find \( \) and \[ \] in card HTML;
                         typeset.ts = lazy loader, used by card-viewer/use-frames.ts;
@@ -52,10 +54,13 @@ src/features/<name>/    code grouped by feature:
                         chunk; the font's glyph files are bundled with import.meta.glob)
   media/                #/media: the media list (TanStack Table for sorting, rows drawn by
                         media-table.tsx) and #/media/:name, the preview dialog (a child route,
-                        name URI-encoded; files come through package/media-cache.ts)
+                        name URI-encoded; files come through package/media-cache.ts).
+                        font-file.ts reads fonts (names, cmap, post, fvar; TTF/OTF/TTC/WOFF/
+                        WOFF2), font-view.tsx is the font preview, font-samples.ts its text
 e2e/                    Playwright smoke tests; fixtures.ts has the guards, approved-storage.ts the
                         storage allow-list
-scripts/                Node scripts in TypeScript (run directly by Node 24); make_fixtures.py;
+scripts/                Node scripts in TypeScript (run directly by Node 24); make_fixtures.py
+                        (also draws the sample deck's pixel font, pixel_font());
                         media/ = committed media made by other tools (make_video.sh)
 fixtures/               generated test decks (committed): sample.apkg (current format, also the
                         in-app sample), legacy-anki2.apkg, legacy-anki21.apkg (WAL header),
@@ -119,7 +124,9 @@ Checks
   (saved under `test-results/artifacts/`).
 - Save screenshots of key screens at 1280x800 to `test-results/screens/`. After a visual change,
   open only the screenshots that `check:ui` reports as new or changed, preferring element
-  screenshots to full-page ones.
+  screenshots to full-page ones. The report compares file hashes, so Chromium's rendering noise
+  (1-2 colour levels on anti-aliased edges, seen on `media-font.png` and `card-maths.png`) can
+  mark an untouched screen as changed.
 
 Guardrails
 - npm with exact versions (`save-exact=true` in `.npmrc`). Ask before adding any dependency
@@ -152,6 +159,10 @@ with the React Compiler, which this project doesn't use. Left visible on purpose
 Package reading: `@zip.js/zip.js` (import `@zip.js/zip.js/index-native.js`: native
 DecompressionStream, no zip.js workers or WASM), `sql.js` (the worker loads
 `sql-wasm-browser.wasm` via `?url`; Vitest uses the Node build), `fzstd` (streaming zstd).
+
+Fonts: `brotli` 2.1.0 (approved 2026-11-19) decompresses WOFF2 files for the font preview,
+because Chrome has no Brotli DecompressionStream (Firefox does). Import only
+`brotli/decompress`, dynamically (font-file.ts), so it stays an on-demand chunk (89 KB).
 
 shadcn: add components with `npx shadcn@4.23.0 add <name>`. The CLI's preset uses the `cn` package
 and `shadcn/tailwind.css` (both approved; `shadcn` is a dev dependency). Its Inter font was

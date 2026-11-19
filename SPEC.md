@@ -108,7 +108,11 @@ Implemented: `{{Field}}`, `{{#Field}}…{{/Field}}`, `{{^Field}}…{{/Field}}`, 
 `{{furigana:}}`, `{{kana:}}`, `{{kanji:}}`, and the special fields `Tags`, `Type`, `Deck`,
 `Subdeck`, `Card`, `CardFlag`. `{{tts …}}` shows its text (not spoken). Unknown filters pass the
 field through unchanged. Media referenced from the deck CSS (e.g. `_font.ttf` in `@font-face`)
-is loaded from the package. _Also `{{CardID}}`, `{{c1,2::…}}` clozes, `{{#c2}}…{{/c2}}`, and
+is loaded from the package. _Changed after step 5: so are stylesheets from the package that the
+CSS `@import`s or a `<link rel="stylesheet">` loads, with the fonts and images they use in turn
+(they used to load without them, so their fonts fell back silently). Imports are followed up
+to eight levels; one that leads back to a stylesheet already being read is left out, as
+browsers do. Web addresses inside them count as web content, listed under the file's name._ _Also `{{CardID}}`, `{{c1,2::…}}` clozes, `{{#c2}}…{{/c2}}`, and
 the old `{{=<% %>=}}` delimiters. A missing field or a broken template shows Anki's own error
 message in place of that side, as Anki does._
 
@@ -140,7 +144,9 @@ Cards render in a sandboxed `<iframe>` with its own Content-Security-Policy.
 - _How it works: every frame is sandboxed with `allow-scripts` but not `allow-same-origin`, so it
   has an opaque origin and nothing in it can reach the app, the package or other cards. A small
   loader inside it receives the card and its media files by `postMessage`, makes its own `blob:`
-  URLs (an opaque origin can't use the app's) and writes the card in. With scripts blocked, the
+  URLs (an opaque origin can't use the app's) and writes the card in. Package stylesheets arrive
+  as text, cleaned like the card, and the loader fills in the URLs of the files they use before
+  making their own `blob:` URLs. With scripts blocked, the
   loader's CSP lets only the loader itself run (by a random nonce), and the card's own CSP
   forbids scripts outright, so a script the clean-up missed is refused twice over. With scripts
   allowed, both policies let the card's scripts run._
@@ -203,6 +209,17 @@ _As built (step 5):_
   type._
 - _Added: text files (`.js`, `.css`, `.json`, `.txt`) show their first 256 KB as plain text, so
   a deck's script files can be read before allowing scripts._
+- _Added after step 5: fonts (`.ttf`, `.otf`, `.ttc`, `.woff`, `.woff2`) are a kind of their own,
+  with a Fonts tab. The preview shows the font's details (family, style, version, format,
+  number of glyphs and characters, variation axes, colour tables, copyright), a box to try your
+  own text, and sample text in 18 languages and a line of digits and symbols. Characters the
+  font lacks are faded and underlined (the browser draws them with another font) and listed
+  next to the language; languages with none of their letters in the font are listed as "not in
+  this font". Private use characters (U+E000–U+F8FF and planes 15 and 16) the font has are shown
+  in a grid with their code points and glyph names, 240 at a time. The details come from the
+  file itself (its `name`, `cmap`, `post` and `fvar` tables); WOFF2 files are decompressed with
+  the `brotli` package, loaded only for them. The font is added to the page only while the
+  preview shows it._
 
 ## 5. Layout, theme, accessibility
 
@@ -250,7 +267,10 @@ _As built (step 5):_
 - **Test decks**: `scripts/make_fixtures.py` (Python standard library only: `sqlite3`, `zipfile`,
   `compression.zstd`) builds small decks in all three formats with Basic, Basic-and-reversed,
   Cloze, type-in, MathJax and custom notes, generated PNG flags, SVGs and WAV chimes, a WebM
-  video (a Mandelbrot zoom made once by `scripts/make_video.sh` with ffmpeg and committed), a card
+  video (a Mandelbrot zoom made once by `scripts/make_video.sh` with ffmpeg and committed), a
+  TrueType pixel font drawn by the script (Latin capitals, digits and private use icons, one in
+  plane 15, with glyph names) that the Country note type's styling loads through an `@import`ed
+  stylesheet, a card
   with a `<script>`, a card referencing a web image and one referencing a missing file. Output
   is deterministic. `fixtures/sample.apkg` is also the in-app sample deck. Vitest also runs
   against any files in `fixtures/real/`. _Changed from the Node script first planned: Python's

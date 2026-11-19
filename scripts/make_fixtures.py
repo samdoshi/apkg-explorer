@@ -6,7 +6,7 @@
 Output is deterministic: re-running only changes files when this script changes.
 Uses only the Python standard library (sqlite3, zipfile, compression.zstd needs 3.14+).
 The sample deck's video, scripts/media/mandelbrot.webm, is committed; scripts/make_video.sh
-(ffmpeg) remakes it.
+(ffmpeg) remakes it. Its font, _pixel.ttf, is drawn here (pixel_font).
 
 Packages written (see SPEC.md section 1 for the formats):
   fixtures/sample.apkg              current format: collection.anki21b (zstd, schema 18),
@@ -105,7 +105,9 @@ def cloze(nt_id: int) -> NoteType:
                     CLOZE_CSS, cloze=True, stock_kind=5)
 
 
-COUNTRY_CSS = """.card {
+# The badge's font is declared in a stylesheet of its own, as some shared decks do.
+COUNTRY_CSS = """@import url("_country.css");
+.card {
     font-family: system-ui, sans-serif;
     font-size: 22px;
     text-align: center;
@@ -129,12 +131,14 @@ def country(nt_id: int) -> NoteType:
         nt_id, "Country", ["Country", "Capital", "Flag", "Anthem", "Notes"],
         [
             ("Capital",
-             '<img class="globe" src="_globe.svg" alt="">\n<p>What is the capital of {{Country}}?</p>',
+             '<div class="badge">&#xE004; GEOGRAPHY</div>\n<img class="globe" src="_globe.svg" alt="">\n'
+             '<p>What is the capital of {{Country}}?</p>',
              '{{FrontSide}}\n\n<hr id=answer>\n\n<p class="capital">{{Capital}}</p>\n'
              '<div class="flag">{{Flag}}</div>\n{{Anthem}}\n'
              '{{#Notes}}<p class="notes">{{Notes}}</p>{{/Notes}}'),
             ("Flag",
-             '<div class="flag">{{Flag}}</div>\n<p>Which country has this flag?</p>',
+             '<div class="badge">&#xE004; GEOGRAPHY</div>\n<div class="flag">{{Flag}}</div>\n'
+             '<p>Which country has this flag?</p>',
              '{{FrontSide}}\n\n<hr id=answer>\n\n<p class="capital">{{Country}}</p>\n'
              '<p>Capital: {{Capital}}</p>'),
         ],
@@ -580,6 +584,254 @@ WAVES_SVG = b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 60" pre
 """
 
 # --------------------------------------------------------------------------------------
+# A pixel font (TrueType) for the Country cards and the media browser's font preview
+
+# Each glyph: the character, then 7 rows of 5 pixels, top first. a-z use the A-Z glyphs.
+PIXEL_GLYPHS = """
+A .###. #...# #...# ##### #...# #...# #...#
+B ####. #...# #...# ####. #...# #...# ####.
+C .###. #...# #.... #.... #.... #...# .###.
+D ####. #...# #...# #...# #...# #...# ####.
+E ##### #.... #.... ####. #.... #.... #####
+F ##### #.... #.... ####. #.... #.... #....
+G .###. #...# #.... #.### #...# #...# .####
+H #...# #...# #...# ##### #...# #...# #...#
+I .###. ..#.. ..#.. ..#.. ..#.. ..#.. .###.
+J ..### ...#. ...#. ...#. ...#. #..#. .##..
+K #...# #..#. #.#.. ##... #.#.. #..#. #...#
+L #.... #.... #.... #.... #.... #.... #####
+M #...# ##.## #.#.# #.#.# #...# #...# #...#
+N #...# #...# ##..# #.#.# #..## #...# #...#
+O .###. #...# #...# #...# #...# #...# .###.
+P ####. #...# #...# ####. #.... #.... #....
+Q .###. #...# #...# #...# #.#.# #..#. .##.#
+R ####. #...# #...# ####. #.#.. #..#. #...#
+S .#### #.... #.... .###. ....# ....# ####.
+T ##### ..#.. ..#.. ..#.. ..#.. ..#.. ..#..
+U #...# #...# #...# #...# #...# #...# .###.
+V #...# #...# #...# #...# #...# .#.#. ..#..
+W #...# #...# #...# #.#.# #.#.# #.#.# .#.#.
+X #...# #...# .#.#. ..#.. .#.#. #...# #...#
+Y #...# #...# .#.#. ..#.. ..#.. ..#.. ..#..
+Z ##### ....# ...#. ..#.. .#... #.... #####
+0 .###. #...# #..## #.#.# ##..# #...# .###.
+1 ..#.. .##.. ..#.. ..#.. ..#.. ..#.. .###.
+2 .###. #...# ....# ...#. ..#.. .#... #####
+3 ####. ....# ....# .###. ....# ....# ####.
+4 ...#. ..##. .#.#. #..#. ##### ...#. ...#.
+5 ##### #.... ####. ....# ....# #...# .###.
+6 ..##. .#... #.... ####. #...# #...# .###.
+7 ##### ....# ...#. ..#.. .#... .#... .#...
+8 .###. #...# #...# .###. #...# #...# .###.
+9 .###. #...# #...# .#### ....# ...#. .##..
+. ..... ..... ..... ..... ..... .##.. .##..
+, ..... ..... ..... ..... .##.. ..#.. .#...
+! ..#.. ..#.. ..#.. ..#.. ..#.. ..... ..#..
+? .###. #...# ....# ...#. ..#.. ..... ..#..
+' ..#.. ..#.. .#... ..... ..... ..... .....
+- ..... ..... ..... ##### ..... ..... .....
+: ..... .##.. .##.. ..... .##.. .##.. .....
+( ...#. ..#.. .#... .#... .#... ..#.. ...#.
+) .#... ..#.. ...#. ...#. ...#. ..#.. .#...
+"""
+
+# Icons in the private use area, 7 x 7, with the glyph names icon fonts usually have.
+# The last is outside the BMP (plane 15), so the font needs a format 12 cmap too.
+PIXEL_ICONS = """
+E000 star ...#... ...#... ####### .#####. ..###.. .##.##. .#...#.
+E001 heart .##.##. ####### ####### ####### .#####. ..###.. ...#...
+E002 music ..##### ..#...# ..#...# ..#...# ###.### ###.### .......
+E003 check ....... ......# .....## #...##. ##.##.. .###... ..#....
+E004 globe ..###.. .#.#.#. #..#..# ####### #..#..# .#.#.#. ..###..
+F0000 diamond ...#... ..###.. .#####. ####### .#####. ..###.. ...#...
+"""
+
+PIXEL = 100  # font units per pixel (1000 per em)
+FONT_TIME = 2_082_844_800 + BASE_MS // 1000  # LONGDATETIME: seconds since 1904
+
+
+def pixel_contours(rows: list[str]) -> list[list[tuple[int, int]]]:
+    """Rectangles (clockwise contours) covering the pixels, one per run of rows alike."""
+    rects: list[list[int]] = []  # [first column, end column, top row, bottom row]
+    open_runs: dict[tuple[int, int], list[int]] = {}
+    for r, row in enumerate(rows):
+        runs = {}
+        for match in re.finditer("#+", row):
+            run = (match.start(), match.end())
+            rect = open_runs.get(run)
+            if rect:
+                rect[3] = r
+            else:
+                rect = [run[0], run[1], r, r]
+                rects.append(rect)
+            runs[run] = rect
+        open_runs = runs
+    contours = []
+    for x0, x1, top, bottom in rects:
+        left, right = 50 + x0 * PIXEL, 50 + x1 * PIXEL
+        low, high = (len(rows) - 1 - bottom) * PIXEL, (len(rows) - top) * PIXEL
+        contours.append([(left, low), (left, high), (right, high), (right, low)])
+    return contours
+
+
+def glyf_entry(contours: list[list[tuple[int, int]]]) -> bytes:
+    """A simple glyph: on-curve points only, coordinates as 16-bit deltas."""
+    if not contours:
+        return b""
+    points = [point for contour in contours for point in contour]
+    xs, ys = [x for x, _ in points], [y for _, y in points]
+    out = struct.pack(">hhhhh", len(contours), min(xs), min(ys), max(xs), max(ys))
+    end = -1
+    for contour in contours:
+        end += len(contour)
+        out += struct.pack(">H", end)
+    out += struct.pack(">H", 0) + bytes([0x01]) * len(points)  # no instructions; flags
+    previous = [(0, 0), *points]
+    out += b"".join(struct.pack(">h", x - px) for (x, _), (px, _) in zip(points, previous))
+    out += b"".join(struct.pack(">h", y - py) for (_, y), (_, py) in zip(points, previous))
+    return out + b"\0" * (-len(out) % 4)
+
+
+def cmap_format4(pairs: list[tuple[int, int]]) -> bytes:
+    segments: list[list[int]] = []  # [start, end, delta]
+    for cp, gid in pairs:
+        if segments and cp == segments[-1][1] + 1 and gid - cp == segments[-1][2]:
+            segments[-1][1] = cp
+        else:
+            segments.append([cp, cp, gid - cp])
+    segments.append([0xFFFF, 0xFFFF, 1])
+    n = len(segments)
+    selector = n.bit_length() - 1
+    body = struct.pack(">HHHH", 2 * n, 2 << selector, selector, 2 * n - (2 << selector))
+    body += b"".join(struct.pack(">H", end) for _, end, _ in segments) + b"\0\0"
+    body += b"".join(struct.pack(">H", start) for start, _, _ in segments)
+    body += b"".join(struct.pack(">H", delta & 0xFFFF) for _, _, delta in segments)
+    body += b"\0\0" * n  # idRangeOffset
+    return struct.pack(">HHH", 4, 6 + len(body), 0) + body
+
+
+def cmap_format12(pairs: list[tuple[int, int]]) -> bytes:
+    groups: list[list[int]] = []  # [start, end, first glyph]
+    for cp, gid in pairs:
+        if groups and cp == groups[-1][1] + 1 and gid == groups[-1][2] + cp - groups[-1][0]:
+            groups[-1][1] = cp
+        else:
+            groups.append([cp, cp, gid])
+    body = b"".join(struct.pack(">III", *group) for group in groups)
+    return struct.pack(">HHIII", 12, 0, 16 + len(body), 0, len(groups)) + body
+
+
+def table_checksum(data: bytes) -> int:
+    data += b"\0" * (-len(data) % 4)
+    return sum(struct.unpack(f">{len(data) // 4}I", data)) & 0xFFFFFFFF
+
+
+def sfnt(tables: dict[str, bytes]) -> bytes:
+    tags = sorted(tables)
+    n = len(tags)
+    selector = n.bit_length() - 1
+    header = struct.pack(">IHHHH", 0x00010000, n, 16 << selector, selector, 16 * n - (16 << selector))
+    offset = 12 + 16 * n
+    directory, data, head_at = b"", b"", 0
+    for tag in tags:
+        table = tables[tag]
+        if tag == "head":
+            head_at = offset + len(data)
+        directory += struct.pack(">4sIII", tag.encode("latin-1"), table_checksum(table), offset + len(data), len(table))
+        data += table + b"\0" * (-len(table) % 4)
+    font = bytearray(header + directory + data)
+    font[head_at + 8:head_at + 12] = struct.pack(">I", (0xB1B0AFBA - table_checksum(bytes(font))) & 0xFFFFFFFF)
+    return bytes(font)
+
+
+def pixel_font() -> bytes:
+    """"Sample Pixel": A-Z (a-z share them), digits, some punctuation and PUA icons."""
+    notdef = [[(50, 0), (50, 700), (550, 700), (550, 0)], [(150, 100), (450, 100), (450, 600), (150, 600)]]
+    # (post name: a standard Macintosh glyph index or a name of its own, contours, advance)
+    glyphs: list[tuple[int | str, list[list[tuple[int, int]]], int]] = [(0, notdef, 600), (3, [], 600)]
+    pairs = [(0x20, 1)]
+    for line in PIXEL_GLYPHS.strip().splitlines():
+        char, *rows = line.split()
+        gid = len(glyphs)
+        glyphs.append((ord(char) - 29, pixel_contours(rows), 600))  # printable ASCII: index = code - 29
+        pairs.append((ord(char), gid))
+        if char.isalpha():
+            pairs.append((ord(char.lower()), gid))
+    for line in PIXEL_ICONS.strip().splitlines():
+        code, name, *rows = line.split()
+        pairs.append((int(code, 16), len(glyphs)))
+        glyphs.append((name, pixel_contours(rows), 800))
+    pairs.sort()
+
+    outlines = [glyf_entry(contours) for _, contours, _ in glyphs]
+    loca = [0]
+    for outline in outlines:
+        loca.append(loca[-1] + len(outline))
+    drawn = [(contours, advance) for _, contours, advance in glyphs if contours]
+    xs = [x for contours, _ in drawn for contour in contours for x, _ in contour]
+    ys = [y for contours, _ in drawn for contour in contours for _, y in contour]
+    lsbs = [min(x for contour in contours for x, _ in contour) if contours else 0 for _, contours, _ in glyphs]
+    rsbs = [advance - max(x for contour in contours for x, _ in contour) for contours, advance in drawn]
+    advances = [advance for _, _, advance in glyphs]
+    num_glyphs = len(glyphs)
+
+    custom = [name for name, _, _ in glyphs if isinstance(name, str)]
+    post = struct.pack(">IihhIIIII", 0x00020000, 0, -100, 50, 0, 0, 0, 0, 0) + struct.pack(">H", num_glyphs)
+    post += b"".join(struct.pack(">H", name if isinstance(name, int) else 258 + custom.index(name))
+                     for name, _, _ in glyphs)
+    post += b"".join(bytes([len(name)]) + name.encode("ascii") for name in custom)
+
+    names = {0: "Public domain. Made by scripts/make_fixtures.py for APKG Explorer's sample deck.",
+             1: "Sample Pixel", 2: "Regular", 3: "Sample Pixel Regular 1.000", 4: "Sample Pixel Regular",
+             5: "Version 1.000", 6: "SamplePixel-Regular"}
+    records, strings = b"", b""
+    for name_id, text in names.items():
+        encoded = text.encode("utf-16-be")
+        records += struct.pack(">HHHHHH", 3, 1, 0x409, name_id, len(encoded), len(strings))
+        strings += encoded
+    name = struct.pack(">HHH", 0, len(names), 6 + len(records)) + records + strings
+
+    bmp = cmap_format4([pair for pair in pairs if pair[0] <= 0xFFFF])
+    cmap = struct.pack(">HHHHIHHI", 0, 2, 3, 1, 20, 3, 10, 20 + len(bmp)) + bmp + cmap_format12(pairs)
+
+    return sfnt({
+        "head": struct.pack(">IIIIHHqqhhhhHHhhh", 0x00010000, 0x00010000, 0, 0x5F0F3CF5, 0x0003, 1000,
+                            FONT_TIME, FONT_TIME, min(xs), min(ys), max(xs), max(ys), 0, 8, 2, 1, 0),
+        "hhea": struct.pack(">IhhhHhhhhhhhhhhhH", 0x00010000, 800, -200, 200, max(advances), min(lsbs), min(rsbs),
+                            max(xs), 1, 0, 0, 0, 0, 0, 0, 0, num_glyphs),
+        "maxp": struct.pack(">IHHHHHHHHHHHHHH", 0x00010000, num_glyphs,
+                            max(sum(len(contour) for contour in contours) for contours, _ in drawn),
+                            max(len(contours) for contours, _ in drawn), 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0),
+        "OS/2": struct.pack(">HhHHH" + "h" * 11 + "10sIIII4sHHHhhhHHIIhhHHH", 4,
+                            round(sum(advances[1:]) / (num_glyphs - 1)), 400, 5, 0,
+                            650, 600, 0, 75, 650, 600, 0, 350, 50, 300, 0, bytes(10),
+                            # Basic Latin; non-BMP and private use (BMP and plane 15)
+                            1, (1 << 25) | (1 << 28), 1 << 26, 0, b"NONE",
+                            0x00C0, 0x20, 0xFFFF, 800, -200, 200, 800, 200, 1, 0, 700, 700, 0, 0x20, 0),
+        "hmtx": b"".join(struct.pack(">Hh", advance, lsb) for advance, lsb in zip(advances, lsbs)),
+        "loca": b"".join(struct.pack(">I", offset) for offset in loca),
+        "glyf": b"".join(outlines),
+        "cmap": cmap,
+        "name": name,
+        "post": post,
+    })
+
+
+COUNTRY_STYLE = b"""/* Imported by the Country note type's styling. */
+@font-face {
+    font-family: "Sample Pixel";
+    src: url("_pixel.ttf");
+}
+.badge {
+    font-family: "Sample Pixel", monospace;
+    font-size: 20px;
+    letter-spacing: 2px;
+    color: #616e7c;
+}
+"""
+
+
+# --------------------------------------------------------------------------------------
 # Package contents
 
 C4, D4, E4, F4, G4, A4, B4, C5 = 261.63, 293.66, 329.63, 349.23, 392.0, 440.0, 493.88, 523.25
@@ -604,7 +856,8 @@ def sample_package() -> Package:
     nt_basic, nt_rev, nt_type = basic(1_700_000_000_001), basic_reversed(1_700_000_000_002), basic_typing(1_700_000_000_003)
     nt_cloze, nt_country, nt_quiz = cloze(1_700_000_000_004), country(1_700_000_000_005), quiz(1_700_000_000_006)
     media: dict[str, bytes] = {"_globe.svg": GLOBE_SVG, "_waves.svg": WAVES_SVG, "water.svg": WATER_SVG,
-                               "_shuffle.js": SHUFFLE_JS, "mandelbrot.webm": (MEDIA / "mandelbrot.webm").read_bytes()}
+                               "_shuffle.js": SHUFFLE_JS, "mandelbrot.webm": (MEDIA / "mandelbrot.webm").read_bytes(),
+                               "_pixel.ttf": pixel_font(), "_country.css": COUNTRY_STYLE}
     notes: list[Note] = []
 
     for i, (name, capital, flag, chime, tags, extra) in enumerate(COUNTRIES):

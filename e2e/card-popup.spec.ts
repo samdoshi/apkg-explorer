@@ -11,6 +11,9 @@ async function openSample(page: Page, noteType: RegExp) {
 const mediaDuration = (element: HTMLElement | SVGElement) =>
   element instanceof HTMLMediaElement ? element.duration : 0
 
+const pixelFont = async (element: HTMLElement | SVGElement) =>
+  (await element.ownerDocument.fonts.load('20px "Sample Pixel"')).map((face) => face.status).join()
+
 test('a note opens with its cards, steps through the table order and closes with Back', async ({ page }) => {
   await openSample(page, /^Country/)
   // Sorted by capital, the popup steps Amsterdam, Berlin, Dublin…
@@ -27,6 +30,8 @@ test('a note opens with its cards, steps through the table order and closes with
   const back = page.getByTitle('Back of Capital').contentFrame()
   await expect(front.getByText('What is the capital of Germany?')).toBeVisible()
   await expect(back.getByText('Berlin')).toBeVisible()
+  // The note type's styling imports a stylesheet from the package; the font it declares loads.
+  await expect.poll(() => front.getByText('GEOGRAPHY').evaluate(pixelFont)).toBe('loaded')
   // Media comes from the package: the flag image and the anthem's player.
   await expect(back.getByRole('img')).not.toHaveJSProperty('naturalWidth', 0)
   await expect.poll(() => back.getByLabel('Audio: chime-germany.wav').evaluate(mediaDuration)).toBeGreaterThan(0)

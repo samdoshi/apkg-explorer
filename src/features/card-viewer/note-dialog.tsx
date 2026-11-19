@@ -17,12 +17,13 @@ import { usePrefersDark } from '@/lib/use-prefers-dark'
 import { canPlay } from './can-play'
 import { CardFrame } from './card-frame'
 import { stripClozes } from './cloze'
-import { scanContent, type FrameContent, type FrameDocument } from './card-document'
+import type { FrameContent, FrameDocument } from './card-document'
 import { ContentNotices } from './content-notices'
 import { useContentPermissions } from './content-permissions'
 import type { NoteDialogContext } from './note-dialog-context'
 import { prepareCards, prepareNote, type CardView } from './prepare'
 import { describeCard } from './scheduling'
+import { useContentScan } from './use-content-scan'
 import { useFrames } from './use-frames'
 import { useNoteDetail } from './use-note-detail'
 
@@ -217,15 +218,15 @@ function useFrameOptions() {
 
 function CardPanel({ client, collectionCreated, onKey, view }: PanelProps & { view: CardView }) {
   const contents = useMemo(() => [view.front, view.back], [view])
-  const report = useMemo(() => scanContent(contents), [contents])
-  const frames = useFrames(client, contents, report, useFrameOptions())
+  const scan = useContentScan(client, contents)
+  const frames = useFrames(client, contents, scan, useFrameOptions())
   const [front, back] = frames.status === 'ready' ? frames.frames : []
 
   return (
     // Phones: the panel scrolls, with each side 55% of the screen tall. From md up the
     // panel fits the dialog and the frames share its height.
     <div className="flex flex-col gap-3 p-4 md:h-full">
-      <ContentNotices report={report} noun="card" />
+      {scan && <ContentNotices report={scan.report} noun="card" />}
       {frames.status === 'failed' ? (
         <FramesFailed message={frames.message} />
       ) : (
@@ -248,8 +249,8 @@ function CardPanel({ client, collectionCreated, onKey, view }: PanelProps & { vi
 
 function NotePanel({ client, onKey, content, note }: PanelProps & { content: FrameContent; note: NoteDetail }) {
   const contents = useMemo(() => [content], [content])
-  const report = useMemo(() => scanContent(contents), [contents])
-  const frames = useFrames(client, contents, report, useFrameOptions())
+  const scan = useContentScan(client, contents)
+  const frames = useFrames(client, contents, scan, useFrameOptions())
   const details: [string, string][] = [
     ['Note ID', String(note.id)],
     ['Created', formatDate(note.created)],
@@ -258,7 +259,7 @@ function NotePanel({ client, onKey, content, note }: PanelProps & { content: Fra
 
   return (
     <div className="flex flex-col gap-3 p-4 md:h-full">
-      <ContentNotices report={report} noun="note" />
+      {scan && <ContentNotices report={scan.report} noun="note" />}
       {frames.status === 'failed' ? (
         <FramesFailed message={frames.message} />
       ) : (

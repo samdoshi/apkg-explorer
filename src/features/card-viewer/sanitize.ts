@@ -30,8 +30,10 @@ export interface WebFinding {
 export interface ContentReport {
   scripts: ScriptFinding[]
   web: WebFinding[]
-  /** Package media files the content uses. */
+  /** Package media files the content uses, including those its package stylesheets use. */
   media: string[]
+  /** Stylesheets from the package (`@import`, `<link rel="stylesheet">`) the content uses. */
+  stylesheets: string[]
 }
 
 /** The sites a report's web content comes from, sorted. */
@@ -46,6 +48,13 @@ export interface CleanOptions {
   mediaUrl: (name: string) => string | null
   /** Whether this browser can play an audio or video file. */
   canPlay: (name: string) => boolean
+  /**
+   * The text of a stylesheet from the package, or null if it's missing or not read yet.
+   * Its URLs are cleaned like the rest, so the fonts and images it uses load too.
+   */
+  stylesheetText: (name: string) => string | null
+  /** The URL to use for a package stylesheet, given its cleaned text; null leaves it out. */
+  stylesheetUrl: (name: string, css: string) => string | null
 }
 
 /** For finding out what content needs, before any media is loaded. */
@@ -54,6 +63,8 @@ const SCAN_OPTIONS: CleanOptions = {
   allowWeb: false,
   mediaUrl: () => null,
   canPlay: () => true,
+  stylesheetText: () => null,
+  stylesheetUrl: () => null,
 }
 
 /** Labels for what an element loads, in placeholders ("Blocked image from…") and lists. */
@@ -105,12 +116,16 @@ export class ContentCleaner {
   private readonly scripts = new Map<string, ScriptFinding>()
   private readonly web = new Map<string, WebFinding>()
   private readonly media = new Set<string>()
+  private readonly stylesheets = new Set<string>()
+  /** Each package stylesheet's URL, once cleaned (null while it's being cleaned). */
+  private readonly stylesheetUrls = new Map<string, string | null>()
   private doc: Document | undefined
   /** The part being cleaned ("Front", a field name…), recorded with each finding. */
   private where = ''
 
-  constructor(options: CleanOptions = SCAN_OPTIONS) {
-    this.options = options
+  /** Without options (or with only some), it cleans for a scan: nothing loads. */
+  constructor(options: Partial<CleanOptions> = {}) {
+    this.options = { ...SCAN_OPTIONS, ...options }
   }
 
   report(): ContentReport {
@@ -118,6 +133,7 @@ export class ContentCleaner {
       scripts: [...this.scripts.values()],
       web: [...this.web.values()],
       media: [...this.media],
+      stylesheets: [...this.stylesheets],
     }
   }
 
@@ -139,7 +155,7 @@ export class ContentCleaner {
 
   private cleanCss(css: string): string {
     return rewriteCssUrls(css, (url, kind) =>
-      this.load(url, kind === 'import' ? 'Stylesheet (CSS @import)' : 'Font or image (CSS url)'),
+      kind === 'import' ? this.loadStylesheet(url, 'Stylesheet (CSS @import)') : this.load(url, 'Font or image (CSS url)'),
     )
   }
 
@@ -176,6 +192,29 @@ export class ContentCleaner {
       case 'other':
         return null
     }
+  }
+
+  /**
+   * Like load(), for a stylesheet. One from the package is cleaned too: its URLs would
+   * otherwise be relative to a blob: URL, so its fonts and images wouldn't load.
+   */
+  private loadStylesheet(raw: string, kind: string): string | null {
+    const target = classifyUrl(raw)
+    if (target.kind !== 'local') return this.load(raw, kind)
+    const { name } = target
+    this.stylesheets.add(name)
+    // Cleaned once; a stylesheet that imports itself (directly or not) gets nothing the second time.
+    if (this.stylesheetUrls.has(name)) return this.stylesheetUrls.get(name) ?? null
+    this.stylesheetUrls.set(name, null)
+    const text = this.options.stylesheetText(name)
+    if (text === null) return null
+    const where = this.where
+    this.where = name
+    const css = this.cleanCss(text)
+    this.where = where
+    const url = this.options.stylesheetUrl(name, css)
+    this.stylesheetUrls.set(name, url)
+    return url
   }
 
   private cleanTree(root: DocumentFragment) {
@@ -293,7 +332,7 @@ export class ContentCleaner {
     const rel = element.getAttribute('rel')?.toLowerCase().split(/\s+/) ?? []
     const href = element.getAttribute('href')
     // Only stylesheets are kept; icons, preloads and the like have no use in a card.
-    const url = href !== null && rel.includes('stylesheet') ? this.load(href, 'Stylesheet') : null
+    const url = href !== null && rel.includes('stylesheet') ? this.loadStylesheet(href, 'Stylesheet') : null
     if (url === null) element.remove()
     else element.setAttribute('href', url)
   }
@@ -436,5 +475,6 @@ export function mergeReports(reports: ContentReport[]): ContentReport {
     scripts: [...scripts.values()],
     web: [...web.values()],
     media: [...new Set(reports.flatMap((report) => report.media))],
+    stylesheets: [...new Set(reports.flatMap((report) => report.stylesheets))],
   }
 }

@@ -11,6 +11,7 @@ import type { PackageClient } from '@/features/package/package-client'
 import { usePackage } from '@/features/package/package-context'
 import { formatBytes } from '@/lib/format'
 import { isOpenedFromList, openedFromList } from '@/lib/opened-from-list'
+import { FontView } from './font-view'
 import { kindInfo } from './kinds'
 import type { MediaPreviewContext } from './media-preview-context'
 import { extensionLabel, mediaPath, type MediaRow } from './media-rows'
@@ -147,6 +148,8 @@ function PreviewBody({ client, file }: { client: PackageClient; file: MediaRow }
           <ImageView name={file.name} url={media.url} onDimensions={setDimensions} />
         ) : file.kind === 'audio' || file.kind === 'video' ? (
           <PlayerView name={file.name} kind={file.kind} url={media.url} />
+        ) : file.kind === 'font' ? (
+          <FontView name={file.name} blob={media.blob} />
         ) : isText(file.name) ? (
           <TextView name={file.name} blob={media.blob} />
         ) : (

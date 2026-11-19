@@ -41,7 +41,7 @@ export function CardFrame({ frame, title, onKey, className }: CardFrameProps) {
       const target = iframe.contentWindow
       if (!target || event.source !== target || !isFrameMessage(event.data) || event.data.token !== token) return
       if (event.data.type === 'ready') {
-        target.postMessage({ token, type: 'render', html: payload.html, media: payload.media }, '*')
+        target.postMessage({ token, type: 'render', html: payload.html, files: payload.files }, '*')
       } else if (FORWARDED_KEYS.has(event.data.key)) {
         handleKey(event.data.key)
       }

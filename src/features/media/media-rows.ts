@@ -13,7 +13,7 @@ export interface MediaRow {
 }
 
 /** In the order the kind filter and the Kind column's sort use. */
-export const MEDIA_KINDS: readonly MediaKind[] = ['image', 'audio', 'video', 'other']
+export const MEDIA_KINDS: readonly MediaKind[] = ['image', 'audio', 'video', 'font', 'other']
 
 export type KindFilter = MediaKind | 'all'
 
@@ -48,7 +48,7 @@ export function filterMediaRows(rows: readonly MediaRow[], query: string, kind: 
 }
 
 export function countKinds(rows: readonly MediaRow[]): Record<MediaKind, number> {
-  const counts: Record<MediaKind, number> = { image: 0, audio: 0, video: 0, other: 0 }
+  const counts: Record<MediaKind, number> = { image: 0, audio: 0, video: 0, font: 0, other: 0 }
   for (const row of rows) counts[row.kind] += 1
   return counts
 }

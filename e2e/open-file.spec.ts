@@ -22,7 +22,7 @@ test('sample deck opens to its notes and overview, and a reload forgets it', asy
   const totals = page.getByRole('list', { name: 'Totals' })
   await expect(totals).toContainText('23 notes')
   await expect(totals).toContainText('36 cards')
-  await expect(totals).toContainText('17 media files')
+  await expect(totals).toContainText('19 media files')
   const noteTypes = page.getByRole('region', { name: 'Note types' })
   await expect(noteTypes.getByRole('heading', { level: 3 })).toHaveText([
     'Basic',

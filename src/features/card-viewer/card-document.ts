@@ -7,8 +7,12 @@ import { ContentCleaner, mergeReports, type ContentReport } from './sanitize'
  * Every frame is sandboxed with allow-scripts but not allow-same-origin, so it has an
  * opaque origin: nothing in it can reach the app, the package or other cards. An opaque
  * origin can't load the app's blob: URLs, so the frame starts with a small loader that
- * receives the card and its media files by postMessage, makes its own blob: URLs and
- * writes the card into itself. Keys the popup handles come back the same way.
+ * receives the card and its files by postMessage, makes its own blob: URLs and writes the
+ * card into itself. Keys the popup handles come back the same way.
+ *
+ * Stylesheets from the package (`@import "_style.css"`) are cleaned like the card, and sent
+ * as text: the loader fills in the URLs of the fonts and images they use before making
+ * their blob: URLs.
  *
  * Scripts blocked (the default): the cleaner removes scripts and inline handlers, the
  * first document's Content-Security-Policy lets only the loader run (it carries the
@@ -51,23 +55,61 @@ export interface FrameDocument {
   /** The loader. */
   srcdoc: string
   sandbox: string
-  /** What the loader is sent: the card's HTML, and the media files its placeholders stand for. */
-  payload: { html: string; media: Blob[] }
+  /**
+   * What the loader is sent: the card's HTML, and the files its placeholders stand for. A
+   * Blob is a media file; a string is a stylesheet, whose own placeholders (always for
+   * earlier files) the loader fills in first.
+   */
+  payload: { html: string; files: (Blob | string)[] }
+}
+
+/** Package stylesheets' text by name; null when the package doesn't have one. */
+export type StylesheetTexts = ReadonlyMap<string, string | null>
+
+/** What some content does and needs, including what its package stylesheets do. */
+export interface ContentScan {
+  report: ContentReport
+  stylesheets: StylesheetTexts
 }
 
 /** Where findings in the note type's CSS are said to be. */
 const CSS_LABEL = 'Card styling'
 
-/** Finds out what content needs (media) and does (scripts, web loads), before loading media. */
-export function scanContent(contents: FrameContent[]): ContentReport {
+/**
+ * Finds out what content needs (media) and does (scripts, web loads), before loading media.
+ * Package stylesheets are looked into when their text is in `stylesheets`.
+ */
+export function scanContent(contents: FrameContent[], stylesheets: StylesheetTexts = new Map()): ContentReport {
+  const stylesheetText = (name: string) => stylesheets.get(name) ?? null
   return mergeReports(
     contents.map((content) => {
-      const cleaner = new ContentCleaner()
+      const cleaner = new ContentCleaner({ stylesheetText })
       for (const part of content.parts) cleaner.html(part.html, part.label)
       cleaner.css(content.css, CSS_LABEL)
       return cleaner.report()
     }),
   )
+}
+
+/** Stylesheets importing stylesheets: how many levels are read. Deeper ones are left out. */
+const STYLESHEET_DEPTH = 8
+
+/**
+ * scanContent(), after reading the package stylesheets the content uses, and the ones
+ * those import. `read` gives each name's text, or null if the package doesn't have it.
+ */
+export async function scanWithStylesheets(
+  contents: FrameContent[],
+  read: (names: string[]) => Promise<StylesheetTexts>,
+): Promise<ContentScan> {
+  const stylesheets = new Map<string, string | null>()
+  for (let depth = 0; ; depth++) {
+    const report = scanContent(contents, stylesheets)
+    const unread = report.stylesheets.filter((name) => !stylesheets.has(name))
+    if (unread.length === 0 || depth === STYLESHEET_DEPTH) return { report, stylesheets }
+    const texts = await read(unread)
+    for (const name of unread) stylesheets.set(name, texts.get(name) ?? null)
+  }
 }
 
 /**
@@ -151,12 +193,16 @@ function head(csp: string, colorScheme: string): string {
 function loaderScript(token: string): string {
   return `(() => {
   const token = '${token}';
-  const media = /apkg-media-${token}-(\\d+)/g;
+  const placeholder = /apkg-media-${token}-(\\d+)/g;
   addEventListener('message', (event) => {
     const data = event.data;
     if (event.source !== parent || !data || data.token !== token || data.type !== 'render') return;
-    const urls = data.media.map((blob) => URL.createObjectURL(blob));
-    const html = data.html.replace(media, (_, index) => urls[Number(index)] || '');
+    const urls = [];
+    const fill = (text) => text.replace(placeholder, (_, index) => urls[Number(index)] || '');
+    for (const file of data.files) {
+      urls.push(URL.createObjectURL(typeof file === 'string' ? new Blob([fill(file)], { type: 'text/css' }) : file));
+    }
+    const html = fill(data.html);
     document.open();
     document.write(html);
     document.close();
@@ -173,27 +219,38 @@ function loaderScript(token: string): string {
 })();`
 }
 
-/** Builds one frame's documents, using the media the content needs (already loaded). */
+/**
+ * Builds one frame's documents, using the media the content needs (already loaded) and
+ * the text of its package stylesheets (from scanWithStylesheets).
+ */
 export function buildFrame(
   content: FrameContent,
   options: FrameOptions,
   media: Pick<MediaHandle, 'blob'>,
+  stylesheets: StylesheetTexts = new Map(),
 ): FrameDocument {
   const token = randomToken()
-  const blobs: Blob[] = []
+  const files: (Blob | string)[] = []
   const indexes = new Map<string, number>()
-  // Media is referenced by placeholders that the loader swaps for blob: URLs it makes.
+  // Files are referenced by placeholders that the loader swaps for blob: URLs it makes.
+  const placeholder = (index: number) => `apkg-media-${token}-${String(index)}`
   const mediaUrl = (name: string) => {
     const blob = media.blob(name)
     if (!blob) return null
     let index = indexes.get(name)
     if (index === undefined) {
-      index = blobs.push(blob) - 1
+      index = files.push(blob) - 1
       indexes.set(name, index)
     }
-    return `apkg-media-${token}-${String(index)}`
+    return placeholder(index)
   }
-  const cleaner = new ContentCleaner({ ...options, mediaUrl })
+  const cleaner = new ContentCleaner({
+    ...options,
+    mediaUrl,
+    stylesheetText: (name) => stylesheets.get(name) ?? null,
+    // Added after cleaning, so the files it uses come before it.
+    stylesheetUrl: (_name, css) => placeholder(files.push(css) - 1),
+  })
   const body = content.layout(content.parts.map((part) => cleaner.html(part.html, part.label)))
   const css = cleaner.css(content.css, CSS_LABEL)
 
@@ -210,6 +267,6 @@ export function buildFrame(
     token,
     srcdoc: `<!doctype html><html><head>${loaderHead}<script nonce="${token}">${loaderScript(token)}</script></head></html>`,
     sandbox: `allow-scripts ${SANDBOX_BASE}`,
-    payload: { html, media: blobs },
+    payload: { html, files },
   }
 }

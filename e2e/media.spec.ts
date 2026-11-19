@@ -3,6 +3,10 @@ import { expect, expectOnlyApprovedStorage, saveScreen, saveSettledScreen, test 
 const mediaDuration = (element: HTMLElement | SVGElement) =>
   element instanceof HTMLMediaElement ? element.duration : 0
 
+/** The statuses of the fonts the preview has added to the page. */
+const previewFonts = (element: HTMLElement | SVGElement) =>
+  [...element.ownerDocument.fonts].filter((face) => face.family.includes('apkg-font-preview')).map((face) => face.status)
+
 test('the media list filters, sorts and previews files, which download and close with Back', async ({ page }) => {
   await page.goto('./')
   await page.getByRole('button', { name: 'Try a sample deck' }).click()
@@ -10,17 +14,17 @@ test('the media list filters, sorts and previews files, which download and close
 
   await expect(page).toHaveURL(/#\/media$/)
   const status = page.getByRole('status')
-  await expect(status).toHaveText(/^17 files · \d+ KB$/)
+  await expect(status).toHaveText(/^19 files · \d+ KB$/)
   const kinds = page.getByRole('radiogroup', { name: 'Kind' })
-  await expect(kinds.getByRole('radio')).toHaveText(['All 17', 'Images 9', 'Audio 6', 'Video 1', 'Other 1'])
+  await expect(kinds.getByRole('radio')).toHaveText(['All 19', 'Images 9', 'Audio 6', 'Video 1', 'Fonts 1', 'Other 2'])
   const table = page.getByRole('table', { name: 'Media files' })
   const rows = table.getByRole('row')
-  await expect(rows.nth(1)).toContainText('_globe.svg')
+  await expect(rows.nth(1)).toContainText('_country.css')
   await saveScreen(page, 'media-list')
 
   // Images only, smallest first.
   await kinds.getByRole('radio', { name: /^Images/ }).click()
-  await expect(status).toHaveText(/^Showing 9 files of 17 · /)
+  await expect(status).toHaveText(/^Showing 9 files of 19 · /)
   await table.getByRole('button', { name: 'Size' }).click()
   await expect(rows.nth(1)).toContainText('flag-germany.png')
 
@@ -75,9 +79,40 @@ test('the media list filters, sorts and previews files, which download and close
   await dialog.getByRole('button', { name: 'Close' }).click()
   await expect(dialog).toHaveCount(0)
 
+  // Fonts: details, sample text marking what the font lacks, your own text, private use glyphs.
+  await search.fill('')
+  await kinds.getByRole('radio', { name: /^Fonts/ }).click()
+  await rows.nth(1).click()
+  dialog = page.getByRole('dialog', { name: '_pixel.ttf' })
+  await expect(dialog.getByText(/^Font · TTF · [\d.]+ KB · File 1 of 1$/)).toBeVisible()
+  await expect(dialog.getByLabel('Font details')).toContainText(
+    'FamilySample PixelStyleRegularVersionVersion 1.000FormatTrueTypeGlyphs53Characters78',
+  )
+  const samples = dialog.getByRole('list', { name: 'Sample text' }).getByRole('listitem')
+  await expect(samples).toHaveCount(9)
+  await expect(samples.first()).toHaveText('EnglishThe quick brown fox jumps over the lazy dog.')
+  await expect(samples.nth(1)).toContainText('French · not in this font: ë œ é è')
+  await expect(dialog.getByText(/^Not in this font: Greek, Russian, .*, Japanese, Korean\.$/)).toBeVisible()
+  await dialog.getByLabel('Your text').fill('Anki 暗記')
+  await expect(dialog.getByText('Your text · not in this font: 暗 記')).toBeVisible()
+  await expect(dialog.getByRole('list', { name: 'Private use characters' }).getByRole('listitem')).toHaveText([
+    /U\+E000 star$/,
+    /U\+E001 heart$/,
+    /U\+E002 music$/,
+    /U\+E003 check$/,
+    /U\+E004 globe$/,
+    /U\+F0000 diamond$/,
+  ])
+  await expect.poll(() => dialog.getByLabel('Font details').evaluate(previewFonts)).toEqual(['loaded'])
+  await saveScreen(dialog, 'media-font')
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  // The font is only on the page while it's previewed.
+  await expect.poll(() => table.evaluate(previewFonts)).toEqual([])
+
   await search.fill('no such file')
   await expect(page.getByText('No files match the search and filter.')).toBeVisible()
   await page.getByRole('button', { name: 'Clear search and filter' }).click()
-  await expect(status).toHaveText(/^17 files/)
+  await expect(status).toHaveText(/^19 files/)
   await expectOnlyApprovedStorage(page)
 })

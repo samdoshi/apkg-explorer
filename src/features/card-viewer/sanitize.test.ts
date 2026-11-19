@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
 import type { MediaHandle } from '@/features/package/media-cache'
-import { buildFrame, scanContent, type FrameContent } from './card-document'
+import { buildFrame, scanContent, scanWithStylesheets, type FrameContent } from './card-document'
 import { ContentCleaner, mergeReports, webHosts, type CleanOptions } from './sanitize'
 import { classifyUrl, rewriteCssUrls } from './urls'
 
@@ -158,7 +158,12 @@ describe('frame documents', () => {
   const options = { allowScripts: false, allowWeb: false, nightMode: true, canPlay: () => true }
 
   it('reports what the content needs before media is loaded', () => {
-    expect(scanContent([content])).toEqual({ scripts: [], web: [], media: ['flag.png', 'b.mp3', '_bg.png'] })
+    expect(scanContent([content])).toEqual({
+      scripts: [],
+      web: [],
+      media: ['flag.png', 'b.mp3', '_bg.png'],
+      stylesheets: [],
+    })
   })
 
   it('merges findings from several frames, keeping every place they were found', () => {
@@ -175,7 +180,7 @@ describe('frame documents', () => {
     expect(frame.sandbox).toContain('allow-scripts')
     expect(frame.sandbox).not.toContain('allow-same-origin')
     expect(frame.srcdoc).toContain(`<script nonce="${frame.token}">(() => {\n  const token = '${frame.token}'`)
-    expect(frame.payload.media).toEqual([media.get('flag.png'), media.get('b.mp3'), media.get('_bg.png')])
+    expect(frame.payload.files).toEqual([media.get('flag.png'), media.get('b.mp3'), media.get('_bg.png')])
     expect(frame.payload.html).toContain(
       `<body class="card card1 nightMode night_mode"><div id="qa"><img src="apkg-media-${frame.token}-0">`,
     )
@@ -197,5 +202,63 @@ describe('frame documents', () => {
       // A nonce would make browsers ignore 'unsafe-inline' and block the card's scripts.
       expect(html).not.toContain("'nonce-")
     }
+  })
+
+  describe('package stylesheets', () => {
+    // _b.css and the note type's CSS both import _a.css, which imports _c.css, which
+    // imports _a.css again (a loop) and a file the package doesn't have.
+    const texts: Record<string, string> = {
+      '_b.css': '@import url("_a.css"); .b { color: red }',
+      '_a.css':
+        '@import "_c.css"; @font-face { font-family: Deck; src: url("_font.ttf") } ' +
+        '.a { background: url(https://example.com/bg.png) }',
+      '_c.css': '@import "_a.css"; @import "_missing.css"; .c { background: url(flag.png) }',
+    }
+    const styled: FrameContent = {
+      ...content,
+      parts: [{ label: 'Front', html: '<link rel="stylesheet" href="_b.css"><p>x</p>' }],
+      css: '@import url("_a.css"); .card { font-family: Deck }',
+    }
+    const fonts = new Map([['_font.ttf', new Blob(['ttf'])], ['flag.png', new Blob(['png'])]])
+
+    it('are read level by level, each once, and scanned like the card', async () => {
+      const reads: string[][] = []
+      const scan = await scanWithStylesheets([styled], (names) => {
+        reads.push(names)
+        return Promise.resolve(new Map(names.flatMap((name) => (name in texts ? [[name, texts[name] ?? '']] : []))))
+      })
+      expect(reads).toEqual([['_b.css', '_a.css'], ['_c.css'], ['_missing.css']])
+      expect(scan.stylesheets.get('_missing.css')).toBeNull()
+      expect(scan.report.stylesheets).toEqual(['_b.css', '_a.css', '_c.css', '_missing.css'])
+      expect(scan.report.media).toEqual(['flag.png', '_font.ttf'])
+      // Findings in a stylesheet say which file they're in.
+      expect(scan.report.web).toEqual([
+        { url: 'https://example.com/bg.png', host: 'example.com', kind: 'Font or image (CSS url)', where: ['_a.css'] },
+      ])
+    })
+
+    it('go to the frame cleaned, after the files they use', async () => {
+      const scan = await scanWithStylesheets([styled], (names) =>
+        Promise.resolve(new Map(names.map((name) => [name, texts[name] ?? null]))),
+      )
+      const frame = buildFrame(styled, options, { blob: (name) => fonts.get(name) ?? null }, scan.stylesheets)
+      const { files, html } = frame.payload
+      const placeholder = new RegExp(`apkg-media-${frame.token}-(\\d+)`, 'g')
+      const used = (text: string) => [...text.matchAll(placeholder)].map((match) => Number(match[1]))
+      const sheets = files.flatMap((file, index) => (typeof file === 'string' ? [{ index, css: file }] : []))
+      // _c, _a and _b, each once, and each only using files before it.
+      expect(sheets.map((sheet) => sheet.css.replace(placeholder, 'URL'))).toEqual([
+        '  .c { background: url("URL") }',
+        '@import url("URL"); @font-face { font-family: Deck; src: url("URL") } .a { background: none }',
+        '@import url("URL"); .b { color: red }',
+      ])
+      for (const { index, css } of sheets) expect(Math.max(...used(css))).toBeLessThan(index)
+      expect(files.filter((file) => file instanceof Blob)).toEqual([fonts.get('flag.png'), fonts.get('_font.ttf')])
+      // The card links _b.css and imports _a.css, already in the list.
+      const [c, a, b] = sheets.map((sheet) => sheet.index)
+      expect(html).toContain(`<link rel="stylesheet" href="apkg-media-${frame.token}-${String(b)}">`)
+      expect(html).toContain(`@import url("apkg-media-${frame.token}-${String(a)}"); .card`)
+      expect(c).toBeLessThan(a ?? 0)
+    })
   })
 })
