@@ -59,6 +59,10 @@ describe('current format (collection.anki21b)', () => {
     expect(pkg.summary().mediaCount).toBe(16)
     const flag = pkg.mediaFiles().find((m) => m.name === 'flag-japan.png')
     expect(flag?.size).toBeGreaterThan(100)
+    // The media browser's list: names and sizes only.
+    const list = pkg.mediaList()
+    expect(list).toHaveLength(16)
+    expect(list.find((m) => m.name === 'flag-japan.png')).toEqual({ name: 'flag-japan.png', size: flag?.size })
 
     const png = await pkg.readMedia('flag-japan.png')
     expect(png?.type).toBe('image/png')

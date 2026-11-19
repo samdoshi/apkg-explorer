@@ -1,5 +1,6 @@
 import type { NoteTypeInfo } from './collection'
 import type { PackageErrorInfo } from './errors'
+import type { MediaListItem } from './media-map'
 import type { NoteDetail } from './note-detail'
 import type { NoteRow } from './note-row'
 import type { PackageSummary } from './package'
@@ -10,6 +11,7 @@ export interface PackageApi {
   getNotes(noteTypeId: number): Promise<NoteRow[]>
   getNote(noteId: number): Promise<NoteDetail | null>
   getNoteType(noteTypeId: number): Promise<NoteTypeInfo | null>
+  getMediaList(): Promise<MediaListItem[]>
   readMedia(name: string): Promise<Blob | null>
 }
 

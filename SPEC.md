@@ -184,9 +184,23 @@ A second tab in the header, next to Notes.
 - No thumbnails in the list, to keep memory low.
 - SVGs are only ever shown via `<img>`, which doesn't run scripts inside them.
 
+_As built (step 5):_
+- _Header links are Notes / Media / Overview. The kind filter shows only the kinds the package
+  has, with counts; the status line gives the number of files shown and their total size._
+- _The list is always sorted (by name to start with): clicking a header toggles ascending and
+  descending, shift-click adds a secondary sort. Size sorts unknown sizes last. On phones the
+  Kind column is hidden and each name's icon shows its kind._
+- _The preview is a child route (`#/media/<name>`), like the note popup: Back closes it, `[` and
+  `]` (or the arrow buttons) step through the list's current order, and closing puts focus back
+  on the file's row. Images show on a checkerboard so transparent parts are visible, with their
+  pixel size; audio and video use the browser's player, or say the browser can't play that
+  type._
+- _Added: text files (`.js`, `.css`, `.json`, `.txt`) show their first 256 KB as plain text, so
+  a deck's script files can be read before allowing scripts._
+
 ## 5. Layout, theme, accessibility
 
-- Header: Notes / Overview (and later Media) links, file name, "Open another file".
+- Header: Notes / Media / Overview links, file name, "Open another file".
   _Overview (`#/overview`) keeps the package summary from step 1: format, counts, note types
   with their fields and card types, and decks._
 - Light and dark follow the system (`prefers-color-scheme`). No toggle, because it couldn't be

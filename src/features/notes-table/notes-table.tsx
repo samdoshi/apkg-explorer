@@ -1,8 +1,8 @@
 import { flexRender, type Table } from '@tanstack/react-table'
-import { useVirtualizer } from '@tanstack/react-virtual'
-import { useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent, type Ref } from 'react'
+import { useImperativeHandle, useRef, type Ref } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useVirtualRows } from '@/lib/use-virtual-rows'
 import type { NoteRow } from '@/features/package/note-row'
 import type { Facets } from './column-filter'
 import { ColumnHeader } from './column-header'
@@ -49,47 +49,16 @@ export function NotesTable({
   const scrollRef = useRef<HTMLDivElement>(null)
   const rows = table.getRowModel().rows
   const headers = table.getHeaderGroups()[0]?.headers ?? []
-  const [activeIndex, setActiveIndex] = useState(0)
-  const pendingFocus = useRef<number | null>(null)
-  const current = Math.min(activeIndex, Math.max(rows.length - 1, 0))
-
-  const virtualizer = useVirtualizer({
+  const { items, paddingTop, paddingBottom, current, setActiveIndex, moveTo, onKeyDown } = useVirtualRows({
     count: rows.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => ROW_HEIGHT,
-    overscan: 12,
-    paddingStart: HEADER_HEIGHT,
-    scrollPaddingStart: HEADER_HEIGHT,
+    scrollRef,
+    rowHeight: ROW_HEIGHT,
+    headerHeight: HEADER_HEIGHT,
+    onOpen: (index) => {
+      const row = rows[index]
+      if (row) onOpen(row.original.id)
+    },
   })
-  const items = virtualizer.getVirtualItems()
-  const paddingTop = items.length ? (items[0]?.start ?? 0) - HEADER_HEIGHT : 0
-  const paddingBottom = items.length ? virtualizer.getTotalSize() - (items.at(-1)?.end ?? 0) : 0
-
-  /** Focuses the pending row if it's rendered; false if it isn't (yet). */
-  function focusPending(): boolean {
-    if (pendingFocus.current === null) return true
-    const row = scrollRef.current?.querySelector<HTMLElement>(`[data-index="${String(pendingFocus.current)}"]`)
-    if (!row) return false
-    row.focus({ preventScroll: true })
-    pendingFocus.current = null
-    return true
-  }
-
-  // A row scrolled into view by keyboard navigation gets focus once it's rendered.
-  useEffect(() => {
-    focusPending()
-  })
-
-  function moveTo(index: number) {
-    if (rows.length === 0) return
-    const next = Math.max(0, Math.min(rows.length - 1, index))
-    setActiveIndex(next)
-    pendingFocus.current = next
-    virtualizer.scrollToIndex(next)
-    // Already rendered (e.g. the row a popup was opened from): focus it now, as
-    // nothing may re-render to run the effect above.
-    focusPending()
-  }
 
   useImperativeHandle(ref, () => ({
     focusNote(noteId) {
@@ -97,30 +66,6 @@ export function NotesTable({
       if (index >= 0) moveTo(index)
     },
   }))
-
-  function handleKeyDown(event: KeyboardEvent<HTMLTableSectionElement>) {
-    if (event.key === 'Enter' && !event.altKey && !event.metaKey && !event.ctrlKey) {
-      const row = rows[current]
-      if (row) {
-        event.preventDefault()
-        onOpen(row.original.id)
-      }
-      return
-    }
-    const page = Math.max(1, Math.floor((scrollRef.current?.clientHeight ?? 400) / ROW_HEIGHT) - 1)
-    const moves: Record<string, number> = {
-      ArrowDown: current + 1,
-      ArrowUp: current - 1,
-      PageDown: current + page,
-      PageUp: current - page,
-      Home: 0,
-      End: rows.length - 1,
-    }
-    const target = moves[event.key]
-    if (target === undefined || event.altKey || event.metaKey || event.ctrlKey) return
-    event.preventDefault()
-    moveTo(target)
-  }
 
   return (
     <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto overscroll-contain">
@@ -155,7 +100,7 @@ export function NotesTable({
             })}
           </tr>
         </thead>
-        <tbody onKeyDown={handleKeyDown}>
+        <tbody onKeyDown={onKeyDown}>
           {paddingTop > 0 && (
             <tr aria-hidden="true">
               <td style={{ height: paddingTop }} colSpan={headers.length} />

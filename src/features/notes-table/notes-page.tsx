@@ -18,12 +18,13 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
-import type { NoteDialogContext, NoteDialogLocationState } from '@/features/card-viewer/note-dialog-context'
+import type { NoteDialogContext } from '@/features/card-viewer/note-dialog-context'
 import type { NoteRow } from '@/features/package/note-row'
 import type { NoteTypeSummary, PackageSummary } from '@/features/package/package'
 import type { PackageClient } from '@/features/package/package-client'
 import { usePackage } from '@/features/package/package-context'
 import { formatCount } from '@/lib/format'
+import { openedFromList } from '@/lib/opened-from-list'
 import { buildColumns } from './columns'
 import { computeFacets } from './facets'
 import {
@@ -165,8 +166,7 @@ function NotesBrowser({
     onClosed: (noteId) => tableRef.current?.focusNote(noteId),
   }
   const openNote = (noteId: number) => {
-    const state: NoteDialogLocationState = { fromTable: true }
-    void navigate(`/notes/${String(noteType.id)}/${String(noteId)}`, { state })
+    void navigate(`/notes/${String(noteType.id)}/${String(noteId)}`, { state: openedFromList })
   }
 
   return (

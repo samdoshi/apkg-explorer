@@ -12,7 +12,7 @@ import {
 } from './collection'
 import { PackageError } from './errors'
 import { htmlToText, type MediaRef } from './html-text'
-import { parseLegacyMediaMap, parseMediaEntries, type MediaFile } from './media-map'
+import { parseLegacyMediaMap, parseMediaEntries, type MediaFile, type MediaListItem } from './media-map'
 import { mimeTypeFor } from './mime'
 import type { CardDetail, NoteDetail } from './note-detail'
 import type { NoteRow } from './note-row'
@@ -254,6 +254,11 @@ export class AnkiPackage {
 
   mediaFiles(): MediaFile[] {
     return [...this.media.values()]
+  }
+
+  /** Every media file's name and size, for the media browser. */
+  mediaList(): MediaListItem[] {
+    return this.mediaFiles().map(({ name, size }) => ({ name, size }))
   }
 
   /**

@@ -1,6 +1,7 @@
 import type { NoteTypeInfo } from './collection'
 import { PackageError } from './errors'
 import { MediaCache } from './media-cache'
+import type { MediaListItem } from './media-map'
 import type { NoteDetail } from './note-detail'
 import type { NoteRow } from './note-row'
 import type { PackageSummary } from './package'
@@ -76,6 +77,10 @@ export class PackageClient {
       this.noteTypes.set(noteTypeId, noteType)
     }
     return noteType
+  }
+
+  getMediaList(): Promise<MediaListItem[]> {
+    return this.call('getMediaList')
   }
 
   readMedia(name: string): Promise<Blob | null> {

@@ -30,6 +30,9 @@ const api: PackageApi = {
   async getNoteType(noteTypeId) {
     return Promise.resolve(requirePackage().noteType(noteTypeId))
   },
+  async getMediaList() {
+    return Promise.resolve(requirePackage().mediaList())
+  },
   async readMedia(name) {
     return requirePackage().readMedia(name)
   },
@@ -45,6 +48,8 @@ function handle(request: WorkerRequest): Promise<unknown> {
       return api.getNote(...request.args)
     case 'getNoteType':
       return api.getNoteType(...request.args)
+    case 'getMediaList':
+      return api.getMediaList(...request.args)
     case 'readMedia':
       return api.readMedia(...request.args)
   }

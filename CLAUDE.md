@@ -23,7 +23,8 @@ src/routes.tsx          every route (hash router)
 src/main.tsx            entry
 src/index.css           Tailwind + shadcn theme (dark mode = prefers-color-scheme)
 src/components/ui/      shadcn components (generated; add with the CLI, below)
-src/lib/                shared helpers
+src/lib/                shared helpers, incl. use-virtual-rows.ts (virtual rows + keyboard focus for
+                        both tables) and opened-from-list.ts (popups opened from a list close with Back)
 src/features/<name>/    code grouped by feature:
   app-shell/            layout, header, drop overlay, RequirePackage route guard
   open-file/            start screen, file picker, window-wide drag and drop, sample deck
@@ -45,7 +46,9 @@ src/features/<name>/    code grouped by feature:
                         typeset.ts = lazy loader, used by card-viewer/use-frames.ts;
                         mathjax-engine.ts = MathJax 4 (TeX → SVG on MathJax's lite DOM, its own
                         chunk; the font's glyph files are bundled with import.meta.glob)
-  (to come: media)
+  media/                #/media: the media list (TanStack Table for sorting, rows drawn by
+                        media-table.tsx) and #/media/:name, the preview dialog (a child route,
+                        name URI-encoded; files come through package/media-cache.ts)
 e2e/                    Playwright smoke tests; fixtures.ts has the guards, approved-storage.ts the
                         storage allow-list
 scripts/                Node scripts in TypeScript (run directly by Node 24); make_fixtures.py
@@ -138,8 +141,9 @@ first two fetch code at run time, the last lets TeX insert raw HTML. MathJax's
 `jsdom` (dev) gives Vitest a DOM for the sanitiser tests: put `// @vitest-environment jsdom` at
 the top of a test file that needs one (the default environment is node).
 
-ESLint reports two warnings ("Compilation Skipped: Use of incompatible library") from
-`react-hooks/incompatible-library` for `useReactTable` and `useVirtualizer`. They only matter
+ESLint reports three warnings ("Compilation Skipped: Use of incompatible library") from
+`react-hooks/incompatible-library`: `useReactTable` (notes and media pages) and `useVirtualizer`
+(`src/lib/use-virtual-rows.ts`). They only matter
 with the React Compiler, which this project doesn't use. Left visible on purpose.
 
 Package reading: `@zip.js/zip.js` (import `@zip.js/zip.js/index-native.js`: native

@@ -9,6 +9,9 @@ export interface MediaFile {
   size: number | null
 }
 
+/** A media file as the media browser lists it. */
+export type MediaListItem = Pick<MediaFile, 'name' | 'size'>
+
 /** Legacy packages: JSON object of zip entry name -> media file name. */
 export function parseLegacyMediaMap(text: string): MediaFile[] {
   const parsed: unknown = JSON.parse(text)

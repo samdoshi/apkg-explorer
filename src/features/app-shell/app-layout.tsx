@@ -37,6 +37,9 @@ export function AppLayout() {
                 <NavLink to="/notes" className={navLinkClass}>
                   Notes
                 </NavLink>
+                <NavLink to="/media" className={navLinkClass}>
+                  Media
+                </NavLink>
                 <NavLink to="/overview" className={navLinkClass}>
                   Overview
                 </NavLink>

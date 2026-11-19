@@ -12,6 +12,7 @@ import type { NoteDetail } from '@/features/package/note-detail'
 import type { PackageClient } from '@/features/package/package-client'
 import { usePackage } from '@/features/package/package-context'
 import { formatDate } from '@/lib/format'
+import { isOpenedFromList, openedFromList } from '@/lib/opened-from-list'
 import { usePrefersDark } from '@/lib/use-prefers-dark'
 import { canPlay } from './can-play'
 import { CardFrame } from './card-frame'
@@ -19,7 +20,7 @@ import { stripClozes } from './cloze'
 import { scanContent, type FrameContent, type FrameDocument } from './card-document'
 import { ContentNotices } from './content-notices'
 import { useContentPermissions } from './content-permissions'
-import { isFromTable, type NoteDialogContext, type NoteDialogLocationState } from './note-dialog-context'
+import type { NoteDialogContext } from './note-dialog-context'
 import { prepareCards, prepareNote, type CardView } from './prepare'
 import { describeCard } from './scheduling'
 import { useFrames } from './use-frames'
@@ -45,7 +46,7 @@ export function NoteDialog() {
   const sortField = context.rowFor(noteId)?.fields[noteType.sortFieldIndex] ?? ''
   const title = (noteType.kind === 'cloze' ? stripClozes(sortField) : sortField).trim() || 'Note'
 
-  const fromTable = isFromTable(location.state)
+  const fromTable = isOpenedFromList(location.state)
   const close = () => {
     // Opened from the table: going back closes it and keeps the history tidy.
     if (fromTable) void navigate(-1)
@@ -53,8 +54,9 @@ export function NoteDialog() {
   }
   const go = (id: number | undefined) => {
     // Replace, so Back still closes the popup however far you've stepped.
-    const state: NoteDialogLocationState | null = fromTable ? { fromTable } : null
-    if (id !== undefined) void navigate(`${base}/${String(id)}`, { replace: true, state })
+    if (id !== undefined) {
+      void navigate(`${base}/${String(id)}`, { replace: true, state: fromTable ? openedFromList : null })
+    }
   }
   const handleKey = (key: string) => {
     if (key === 'Escape') close()
