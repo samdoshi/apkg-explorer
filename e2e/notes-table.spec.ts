@@ -48,6 +48,8 @@ test('column filters show as chips and rows work from the keyboard', async ({ pa
   await expect(page.getByRole('status')).toHaveText('Showing 1 note of 6')
   await saveScreen(tagsFilter, 'filter-tags')
   await page.keyboard.press('Escape')
+  // Wait for the popover to finish closing: it hands focus back to its button as it goes.
+  await expect(tagsFilter).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Filter Tags (active)' })).toBeVisible()
 
   await page.getByRole('button', { name: 'Filter Capital' }).click()

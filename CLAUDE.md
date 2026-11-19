@@ -41,7 +41,11 @@ src/features/<name>/    code grouped by feature:
                         content-details.tsx, "View scripts" / "View remote URLs"); card-document.ts =
                         frame documents (CSP, sandbox, the loader used when scripts are allowed).
                         Media blobs come from package/media-cache.ts (64 MB LRU, on the client)
-  (to come: mathjax, media)
+  mathjax/              find-math.ts = where MathJax would find \( \) and \[ \] in card HTML;
+                        typeset.ts = lazy loader, used by card-viewer/use-frames.ts;
+                        mathjax-engine.ts = MathJax 4 (TeX → SVG on MathJax's lite DOM, its own
+                        chunk; the font's glyph files are bundled with import.meta.glob)
+  (to come: media)
 e2e/                    Playwright smoke tests; fixtures.ts has the guards, approved-storage.ts the
                         storage allow-list
 scripts/                Node scripts in TypeScript (run directly by Node 24); make_fixtures.py
@@ -64,8 +68,10 @@ test-results/screens/   screenshots from check:ui (1280x800); test-results/artif
 - Playwright traces are kept on failure but without DOM snapshots: the snapshotter tries to run
   code inside the script-free card frames, which Chromium logs as console errors ("Blocked script
   execution in 'about:srcdoc'") and the smoke tests' guard would fail on.
-- Playwright's Firefox build works here; WebKit does not (it aborts with "Could not create EGL
-  display"). `check:ui` is Chromium-only anyway; for a one-off Firefox run, use a temporary config
+- Playwright's Firefox build works here (all smoke tests passed in it on 2026-11-19); WebKit does
+  not (it aborts with "Could not create EGL display"). `check:ui` is Chromium-only anyway. A
+  one-off Firefox run overwrites `test-results/screens/`, so run `check:ui` again afterwards. For
+  a one-off Firefox run, use a temporary config
   that spreads `playwright.config.ts` and swaps `projects`.
 - Tool inputs decode `\uXXXX` sequences, so a `\u0300` written into a file arrives as the
   literal character. In source, build such characters with `String.fromCodePoint(0x300)`.
@@ -123,8 +129,11 @@ Guardrails
 
 ## Dependencies
 
-Approved but not installed yet (install when the feature needs them, exact versions):
-`@mathjax/src` 4.1.3.
+MathJax: `@mathjax/src` 4.1.3 (brings `@mathjax/mathjax-newcm-font`). Import it as
+`@mathjax/src/js/…` (the package maps that to its ES modules) so the font's own imports share
+the same module instances. Keep the `require`, `autoload` and `texhtml` TeX packages out: the
+first two fetch code at run time, the last lets TeX insert raw HTML. MathJax's
+`speech-rule-engine` and `mj-context-menu` dependencies are installed but not imported.
 
 `jsdom` (dev) gives Vitest a DOM for the sanitiser tests: put `// @vitest-environment jsdom` at
 the top of a test file that needs one (the default environment is node).

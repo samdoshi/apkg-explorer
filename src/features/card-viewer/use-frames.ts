@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { typesetMath } from '@/features/mathjax/typeset'
 import { toPackageError } from '@/features/package/errors'
 import type { MediaHandle } from '@/features/package/media-cache'
 import type { PackageClient } from '@/features/package/package-client'
@@ -11,12 +12,28 @@ export type FramesState =
   | { status: 'failed'; message: string }
 
 type Loaded =
-  | { contents: FrameContent[]; handle: MediaHandle }
+  | { contents: FrameContent[]; handle: MediaHandle; typeset: FrameContent[] }
   | { contents: FrameContent[]; message: string }
 
+/** The content with its maths typeset by MathJax (loaded only if there is any). */
+async function typesetContent(content: FrameContent): Promise<FrameContent> {
+  const { parts, css } = await typesetMath(content.parts.map((part) => part.html))
+  if (css === null) return content
+  return {
+    ...content,
+    parts: content.parts.map((part, index) => ({ ...part, html: parts[index] ?? part.html })),
+    appCss: css,
+  }
+}
+
+function typesetFailed(error: unknown): string {
+  return `Couldn’t typeset the maths: ${error instanceof Error ? error.message : String(error)}`
+}
+
 /**
- * Loads the media some frames need (and holds it while they're shown), then builds
- * their documents. Pass memoised `contents` and `report`: a new array means new frames.
+ * Loads the media some frames need (and holds it while they're shown), typesets their
+ * maths, then builds their documents. Pass memoised `contents` and `report`: a new array
+ * means new frames.
  */
 export function useFrames(
   client: PackageClient,
@@ -29,14 +46,22 @@ export function useFrames(
   useEffect(() => {
     let cancelled = false
     let handle: MediaHandle | null = null
+    const typesetting = Promise.all(contents.map(typesetContent))
+    // Handled below; this only stops an unhandled rejection if the media fails first.
+    typesetting.catch(() => undefined)
     client.media.acquire(report.media).then(
-      (acquired) => {
-        if (cancelled) {
-          acquired.release()
-          return
-        }
+      async (acquired) => {
+        // Set first, so the cleanup below releases it even while typesetting.
         handle = acquired
-        setLoaded({ contents, handle: acquired })
+        let next: Loaded
+        try {
+          next = { contents, handle: acquired, typeset: await typesetting }
+        } catch (error) {
+          next = { contents, message: typesetFailed(error) }
+        }
+        // Releasing twice is harmless; this covers a cleanup that ran before `handle` was set.
+        if (cancelled) acquired.release()
+        else setLoaded(next)
       },
       (error: unknown) => {
         if (!cancelled) setLoaded({ contents, message: toPackageError(error).message })
@@ -54,6 +79,7 @@ export function useFrames(
     if (loaded?.contents !== contents) return { status: 'loading' }
     if ('message' in loaded) return { status: 'failed', message: loaded.message }
     const options = { allowScripts, allowWeb, nightMode, canPlay }
-    return { status: 'ready', frames: contents.map((content) => buildFrame(content, options, loaded.handle)) }
+    const { handle, typeset } = loaded
+    return { status: 'ready', frames: typeset.map((content) => buildFrame(content, options, handle)) }
   }, [loaded, contents, allowScripts, allowWeb, nightMode, canPlay])
 }

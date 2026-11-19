@@ -97,3 +97,25 @@ test('scripts and web content stay blocked, with a notice, until allowed', async
   await expect(back.getByText('Missing image: missing-picture.png')).toBeVisible()
   await expectOnlyApprovedStorage(page)
 })
+
+test('maths is typeset by MathJax, which loads only when a card has maths', async ({ page }) => {
+  const engine: string[] = []
+  page.on('request', (request) => {
+    if (/\/mathjax-engine-[^/]+\.js$/.test(request.url())) engine.push(request.url())
+  })
+  await openSample(page, /^Basic 7 notes/)
+  await page.getByRole('cell', { name: 'What is the chemical symbol for gold?' }).click()
+  await expect(page.getByTitle('Back of Card 1').contentFrame().getByText('Au (from Latin aurum)')).toBeVisible()
+  expect(engine).toEqual([])
+  await page.keyboard.press('Escape')
+
+  await page.getByRole('cell', { name: 'State the quadratic formula.' }).click()
+  const dialog = page.getByRole('dialog')
+  const back = page.getByTitle('Back of Card 1').contentFrame()
+  // Drawn as SVG, with MathML for screen readers; the TeX itself is gone.
+  await expect(back.getByRole('math')).toHaveCount(1)
+  await expect(back.getByText('\\frac')).toHaveCount(0)
+  expect(engine).toHaveLength(1)
+  await saveScreen(dialog, 'card-maths')
+  await expectOnlyApprovedStorage(page)
+})

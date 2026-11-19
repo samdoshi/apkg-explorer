@@ -154,6 +154,25 @@ scripts off). MathJax and its fonts are bundled locally and loaded only the firs
 contains maths. If MathJax 4 can't be bundled fully offline, I'll stop and ask before falling
 back to MathJax 3.
 
+_As built (step 4), with MathJax 4.1.3; no fallback was needed:_
+- _Bundling: the engine is one lazily loaded chunk (1.4 MB, about 0.5 MB gzipped). The font
+  keeps rarer glyph ranges (script, fraktur, arrows, Greek and Cyrillic variants…) in 40
+  files that MathJax asks for by name; each is its own chunk, loaded only when a formula needs
+  it. Nothing comes from outside the app. The first maths card takes about half a second
+  longer while MathJax loads; later ones open as fast as other cards._
+- _TeX packages as in Anki (MathJax's defaults plus `noerrors` and `mhchem`), with the
+  extensions MathJax would fetch on demand (`\cancel`, `\color`, `\boldsymbol`, …) bundled up
+  front. Left out: `require` and `autoload` (they fetch code at run time) and `texhtml` (it lets
+  TeX insert raw HTML)._
+- _Maths is found the way MathJax finds it in Anki's reviewer: only `\( … \)` and `\[ … \]`;
+  not across elements other than `<br>`; not inside `<code>`, `<pre>`, `<script>`, `<style>`,
+  `<textarea>` or `<noscript>`; and the closing delimiter must be outside braces._
+- _Clozes follow Anki's MathJax rules: inside an expression, `}}` only closes a cloze opened in
+  that expression (so `x^{2}}` can't end a cloze early), and the cloze filter turns cloze markup
+  inside maths into plain TeX (`[...]` on the question)._
+- _Output is SVG that takes the text colour (so night mode works), with hidden MathML for
+  screen readers. A TeX error shows MathJax's error box. The Note tab's fields are typeset too._
+
 ## 4. Media browser (`#/media`)
 
 A second tab in the header, next to Notes.
@@ -201,7 +220,7 @@ A second tab in the header, next to Notes.
       package/            zip, zstd, protobuf, media map, schema 11/18 readers, worker
       notes-table/        table, filters, global search, note type menu
       card-viewer/        template renderer, sanitiser, sandboxed iframe, popup
-      mathjax/            lazy MathJax loader
+      mathjax/            finding maths, lazy MathJax loader, TeX → SVG engine
       media/              media browser and preview
   scripts/make_fixtures.py   builds synthetic test decks (npm run fixtures)
   fixtures/               generated decks (committed)

@@ -1,4 +1,4 @@
-import { clozeNumbers, clozeOnly, revealCloze } from './cloze'
+import { clozeNumbers, clozeOnly, revealCloze, stripHtmlInsideMathjax } from './cloze'
 import { escapeHtml } from './escape'
 import { fieldIsEmpty, furigana, hint, kana, kanji, stripHtml } from './template-filters'
 
@@ -161,7 +161,7 @@ function applyFilters(
         result = hint(result, fieldName)
         break
       case 'cloze':
-        result = revealCloze(result, context.cardNumber, context.question)
+        result = stripHtmlInsideMathjax(revealCloze(result, context.cardNumber, context.question))
         break
       case 'cloze-only':
         result = clozeOnly(result, context.cardNumber, context.question)

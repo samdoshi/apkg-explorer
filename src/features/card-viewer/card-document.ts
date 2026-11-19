@@ -27,6 +27,8 @@ export interface FrameContent {
   layout: (parts: string[]) => string
   /** The note type's CSS. */
   css: string
+  /** CSS the app adds before the note type's (MathJax's, when the content has maths). */
+  appCss?: string
   bodyClass: string
 }
 
@@ -175,7 +177,7 @@ export function buildFrame(content: FrameContent, options: FrameOptions, media: 
   const colorScheme = options.nightMode ? 'dark' : 'light'
   const html =
     `<!doctype html><html${options.nightMode ? ' class="night-mode"' : ''}><head>${head(csp, colorScheme)}` +
-    `<style>${BASE_CSS}</style><style>${styleText(css)}</style></head>` +
+    `<style>${BASE_CSS}${styleText(content.appCss ?? '')}</style><style>${styleText(css)}</style></head>` +
     `<body class="${content.bodyClass}${options.nightMode ? ' nightMode night_mode' : ''}">${body}</body></html>`
 
   if (!options.allowScripts) {

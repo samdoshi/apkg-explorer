@@ -3,6 +3,10 @@ import { escapeHtml } from './escape'
 /*
  * Cloze deletions, following Anki's rslib/src/cloze.rs: `{{c1::text}}`, `{{c1::text::hint}}`,
  * clozes nested inside other clozes, and `{{c1,2::text}}` (one deletion on several cards).
+ *
+ * Like Anki, the parser tracks MathJax (\( … \) and \[ … \]): inside an expression, `}}`
+ * only closes a cloze opened in that same expression, so TeX such as `x^{2}}` can't end a
+ * cloze early. An opening delimiter with no closing one is ordinary text.
  */
 
 interface Cloze {
@@ -17,7 +21,11 @@ type ClozeNode = string | Cloze
 
 /** Anki stops nesting at this depth. */
 const MAX_DEPTH = 10
-const MARKER = /\{\{c(\d+(?:,\d+)*)::|\}\}/g
+const OPEN = /\{\{c([\d,]+)::/y
+const MATH_DELIMITERS: [string, string][] = [
+  ['\\(', '\\)'],
+  ['\\[', '\\]'],
+]
 
 export function parseClozes(text: string): ClozeNode[] {
   const output: ClozeNode[] = []
@@ -39,24 +47,54 @@ export function parseClozes(text: string): ClozeNode[] {
     }
   }
 
-  let last = 0
-  for (const match of text.matchAll(MARKER)) {
-    addText(text.slice(last, match.index))
-    last = match.index + match[0].length
-    const ordinals = match[1]
-    if (ordinals !== undefined) {
-      if (stack.length < MAX_DEPTH) {
-        stack.push({ ordinals: ordinals.split(',').map(Number), nodes: [], hint: null, opening: match[0] })
-      } else {
-        addNode(match[0])
-      }
-    } else {
+  // The MathJax expression we're in (its closing delimiter and id), and for each open
+  // cloze, the expression it was opened in.
+  let math: { close: string; id: number } | null = null
+  let nextMathId = 0
+  const regions: (number | null)[] = []
+
+  let textStart = 0
+  let i = 0
+  while (i < text.length) {
+    OPEN.lastIndex = i
+    const open = OPEN.exec(text)
+    const ordinals = open ? parseOrdinals(open[1] ?? '') : []
+    if (open && ordinals.length > 0 && stack.length < MAX_DEPTH) {
+      addText(text.slice(textStart, i))
+      stack.push({ ordinals, nodes: [], hint: null, opening: open[0] })
+      regions.push(math?.id ?? null)
+      i += open[0].length
+      textStart = i
+      continue
+    }
+    const canClose = math === null || regions.at(-1) === math.id
+    if (canClose && text.startsWith('}}', i)) {
+      addText(text.slice(textStart, i))
       const cloze = stack.pop()
+      regions.pop()
       if (cloze) addNode(cloze)
       else addNode('}}')
+      i += 2
+      textStart = i
+      continue
     }
+    if (math === null) {
+      const delimiter = MATH_DELIMITERS.find(
+        ([opening, closing]) => text.startsWith(opening, i) && text.includes(closing, i + 2),
+      )
+      if (delimiter) {
+        math = { close: delimiter[1], id: nextMathId++ }
+        i += 2
+        continue
+      }
+    } else if (text.startsWith(math.close, i)) {
+      math = null
+      i += 2
+      continue
+    }
+    i++
   }
-  addText(text.slice(last))
+  addText(text.slice(textStart))
   // Clozes that are never closed are shown as written.
   while (stack.length > 0) {
     const cloze = stack.pop()
@@ -65,6 +103,12 @@ export function parseClozes(text: string): ClozeNode[] {
     addNode(cloze.opening + cloze.nodes.map(rawText).join('') + hint)
   }
   return output
+}
+
+/** "1,3,1" → [1, 3]; numbers below 1 aren't cloze numbers. */
+function parseOrdinals(list: string): number[] {
+  const numbers = list.split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0)
+  return [...new Set(numbers)].sort((a, b) => a - b)
 }
 
 function rawText(node: ClozeNode): string {
@@ -140,4 +184,18 @@ export function stripClozes(text: string): string {
   return parseClozes(text)
     .map((node) => (typeof node === 'string' ? node : clozedText(node)))
     .join('')
+}
+
+const MATHJAX = /(\\[([])([\s\S]*?)(\\[)\]])/g
+
+/**
+ * Anki's cloze filter removes HTML inside MathJax after rendering (keeping entities), so
+ * cloze markup inside an expression becomes plain TeX: `[...]` on the question.
+ */
+export function stripHtmlInsideMathjax(text: string): string {
+  return text.replace(
+    MATHJAX,
+    (_match, open: string, inner: string, close: string) =>
+      open + inner.replace(/<!--[\s\S]*?-->|<[\s\S]*?>/g, '') + close,
+  )
 }

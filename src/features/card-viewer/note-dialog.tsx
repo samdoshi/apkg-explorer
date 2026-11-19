@@ -332,7 +332,7 @@ function FrameSlot({
 function FramesFailed({ message }: { message: string }) {
   return (
     <Alert variant="destructive">
-      <AlertTitle>Couldn’t load this card’s media</AlertTitle>
+      <AlertTitle>Couldn’t show this card</AlertTitle>
       <AlertDescription>{message}</AlertDescription>
     </Alert>
   )

@@ -137,6 +137,33 @@ describe('clozes', () => {
     )
   })
 
+  it('lets MathJax braces stay inside a cloze, as Anki does', () => {
+    // A `}}` inside \( … \) only closes a cloze opened inside the same expression.
+    expect(revealCloze('{{c1:: \\( \\frac{1}{\\sqrt{\\pi}} \\) }}', 1, false)).toBe(
+      '<span class="cloze" data-ordinal="1"> \\( \\frac{1}{\\sqrt{\\pi}} \\) </span>',
+    )
+    expect(revealCloze('\\(\\sqrt{\\pi}}\\) {{c1::a}}', 1, false)).toBe(
+      '\\(\\sqrt{\\pi}}\\) <span class="cloze" data-ordinal="1">a</span>',
+    )
+    expect(clozeOnly('\\(x = {{c1::a}} + {{c2::\\frac{1}{2} }}\\)', 2, false)).toBe('\\frac{1}{2} ')
+    expect(clozeOnly('{{c1::\\( a {{c2::b}} \\frac{1}{\\sqrt{2}} \\)}} c', 1, false)).toBe(
+      '\\( a b \\frac{1}{\\sqrt{2}} \\)',
+    )
+    // A cloze opened inside an expression can still close after it.
+    expect(clozeOnly('\\(a {{c1::b\\) c}} d', 1, false)).toBe('b\\) c')
+    // An opening delimiter with no closing one is just text.
+    expect(clozeOnly('{{c1::\\( a \\]}} b', 1, false)).toBe('\\( a \\]')
+  })
+
+  it('removes cloze markup inside maths in the cloze filter', () => {
+    const values = { Text: '\\(x = {{c1::a}} + {{c2::b::hint}}\\) and {{c1::y}}' }
+    const card = render('{{cloze:Text}}', '{{cloze:Text}}', values, 1, true)
+    expect(card.question).toBe(
+      '\\(x = a + [hint]\\) and <span class="cloze-inactive" data-ordinal="1">y</span>',
+    )
+    expect(card.answer).toBe('\\(x = a + b\\) and <span class="cloze-inactive" data-ordinal="1">y</span>')
+  })
+
   it('renders cloze cards and says when a card has no deletion', () => {
     const values = { Text: text, Extra: 'More' }
     const card = render('{{cloze:Text}}', '{{cloze:Text}}<br>{{Extra}}', values, 1, true)
