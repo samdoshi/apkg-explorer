@@ -72,6 +72,39 @@ describe('current format (collection.anki21b)', () => {
     expect(svg).toContain('<svg')
 
     expect(await pkg.readMedia('missing-picture.png')).toBeNull()
+    // Percent-encoded names in the HTML find the file too.
+    expect((await pkg.readMedia('flag%2Djapan.png'))?.size).toBe(flag?.size)
+    pkg.close()
+  })
+
+  it('returns one note with its raw fields, cards and note type', async () => {
+    const pkg = await open('sample.apkg')
+    const summary = pkg.summary()
+    const country = summary.noteTypes.find((t) => t.name === 'Country')
+    expect(country?.sortFieldIndex).toBe(0)
+    const japan = pkg.notes(country?.id ?? 0).find((row) => row.fields[0] === 'Japan')
+    const note = pkg.note(japan?.id ?? 0)
+    expect(note).toMatchObject({
+      noteTypeId: country?.id,
+      fields: ['Japan', 'Tokyo', '<img src="flag-japan.png">', '[sound:chime-japan.wav]', ''],
+      tags: ['geography', 'asia'],
+    })
+    expect(note?.cards.map((card) => [card.ord, card.deckName])).toEqual([
+      [0, 'Sample::Geography'],
+      [1, 'Sample::Geography'],
+    ])
+    // The fixture gives Japan's first card some review history; the second is new.
+    expect(note?.cards[0]).toMatchObject({ type: 2, queue: 2, interval: 15, factor: 2500, reps: 5, lapses: 1 })
+    expect(note?.cards[1]).toMatchObject({ type: 0, queue: 0, reps: 0 })
+    expect(summary.collectionCreated).toBeLessThan(japan?.created ?? 0)
+    expect(pkg.note(1)).toBeNull()
+
+    const noteType = pkg.noteType(country?.id ?? 0)
+    expect(noteType?.fields.map((field) => field.name)).toEqual(country?.fieldNames)
+    expect(noteType?.templates.map((template) => template.name)).toEqual(['Capital', 'Flag'])
+    expect(noteType?.templates[0]?.front).toContain('{{Country}}')
+    expect(noteType?.css).toContain('_waves.svg')
+    expect(pkg.noteType(1)).toBeNull()
     pkg.close()
   })
 

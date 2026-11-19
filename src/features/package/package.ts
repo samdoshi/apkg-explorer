@@ -1,16 +1,20 @@
 import type { FileEntry } from '@zip.js/zip.js/index-native.js'
 import type { Database, SqlJsStatic } from 'sql.js'
 import {
+  asNumber,
+  asString,
   queryRows,
   readDecks,
   readNoteTypes,
   readSchemaVersion,
   replaceUnicaseCollation,
+  type NoteTypeInfo,
 } from './collection'
 import { PackageError } from './errors'
 import { htmlToText, type MediaRef } from './html-text'
 import { parseLegacyMediaMap, parseMediaEntries, type MediaFile } from './media-map'
 import { mimeTypeFor } from './mime'
+import type { CardDetail, NoteDetail } from './note-detail'
 import type { NoteRow } from './note-row'
 import { ProtoMessage } from './protobuf'
 import { readZipEntries, readZipEntry } from './zip'
@@ -24,6 +28,8 @@ export interface NoteTypeSummary {
   name: string
   kind: 'normal' | 'cloze'
   isImageOcclusion: boolean
+  /** The field shown as a note's title (Anki's sort field). */
+  sortFieldIndex: number
   fieldNames: string[]
   templateNames: string[]
   noteCount: number
@@ -41,6 +47,8 @@ export interface PackageSummary {
   fileSize: number
   format: PackageFormat
   schemaVersion: number
+  /** When the collection was created (ms since epoch); review due dates count days from it. */
+  collectionCreated: number
   noteCount: number
   cardCount: number
   mediaCount: number
@@ -125,6 +133,7 @@ export class AnkiPackage {
       fileSize: this.file.size,
       format: this.format,
       schemaVersion: readSchemaVersion(this.db),
+      collectionCreated: count('SELECT crt FROM col') * 1000,
       noteCount: count('SELECT count(*) FROM notes'),
       cardCount: count('SELECT count(*) FROM cards'),
       mediaCount: this.media.size,
@@ -134,6 +143,7 @@ export class AnkiPackage {
           name: noteType.name,
           kind: noteType.kind,
           isImageOcclusion: noteType.isImageOcclusion,
+          sortFieldIndex: noteType.sortFieldIndex,
           fieldNames: noteType.fields.map((field) => field.name),
           templateNames: noteType.templates.map((template) => template.name),
           noteCount: notesByType.get(noteType.id) ?? 0,
@@ -196,13 +206,63 @@ export class AnkiPackage {
     return rows
   }
 
+  /** A note type's fields, templates and CSS, for rendering cards. */
+  noteType(noteTypeId: number): NoteTypeInfo | null {
+    return readNoteTypes(this.db).find((type) => type.id === noteTypeId) ?? null
+  }
+
+  /** One note with its raw field HTML and its cards. Null if there's no such note. */
+  note(noteId: number): NoteDetail | null {
+    const [note] = queryRows(this.db, 'SELECT id, mid, mod, tags, flds FROM notes WHERE id = ?', [noteId])
+    if (!note) return null
+    const [id, mid, mod, tags, flds] = note
+    const deckNames = new Map(readDecks(this.db).map((deck) => [deck.id, deck.name]))
+    const cards = queryRows(
+      this.db,
+      `SELECT id, ord, did, odid, type, queue, due, ivl, factor, reps, lapses, flags
+       FROM cards WHERE nid = ? ORDER BY ord, id`,
+      [noteId],
+    ).map((row): CardDetail => {
+      const [cardId, ord, did, odid, type, queue, due, ivl, factor, reps, lapses, flags] =
+        row.map(asNumber)
+      // A card in a filtered deck remembers its home deck in odid.
+      const deckId = odid ? odid : (did ?? 0)
+      return {
+        id: cardId ?? 0,
+        ord: ord ?? 0,
+        deckName: deckNames.get(deckId) ?? `Unknown deck ${String(deckId)}`,
+        type: type ?? 0,
+        queue: queue ?? 0,
+        due: due ?? 0,
+        interval: ivl ?? 0,
+        factor: factor ?? 0,
+        reps: reps ?? 0,
+        lapses: lapses ?? 0,
+        flag: (flags ?? 0) & 0b111,
+      }
+    })
+    return {
+      id: asNumber(id),
+      noteTypeId: asNumber(mid),
+      fields: asString(flds).split('\x1f'),
+      tags: asString(tags).split(/\s+/).filter(Boolean),
+      created: asNumber(id),
+      modified: asNumber(mod) * 1000,
+      cards,
+    }
+  }
+
   mediaFiles(): MediaFile[] {
     return [...this.media.values()]
   }
 
-  /** One media file, read from the zip on demand. Null if the package doesn't have it. */
+  /**
+   * One media file, read from the zip on demand. Null if the package doesn't have it.
+   * Names are matched as written, then NFC-normalised, then percent-decoded (some
+   * editors write `my%20file.jpg` in the HTML for `my file.jpg`).
+   */
   async readMedia(name: string): Promise<Blob | null> {
-    const media = this.media.get(name) ?? this.media.get(name.normalize('NFC'))
+    const media = this.findMedia(name) ?? this.findMedia(percentDecode(name))
     const entry = media && this.entries.get(media.zipName)
     if (!entry) return null
     const type = mimeTypeFor(name)
@@ -216,6 +276,20 @@ export class AnkiPackage {
 
   close() {
     this.db.close()
+  }
+
+  private findMedia(name: string | null): MediaFile | undefined {
+    if (!name) return undefined
+    return this.media.get(name) ?? this.media.get(name.normalize('NFC'))
+  }
+}
+
+function percentDecode(name: string): string | null {
+  if (!name.includes('%')) return null
+  try {
+    return decodeURIComponent(name)
+  } catch {
+    return null
   }
 }
 

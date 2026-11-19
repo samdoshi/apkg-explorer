@@ -5,8 +5,8 @@ import {
   type SortingState,
 } from '@tanstack/react-table'
 import { Search, X } from 'lucide-react'
-import { useDeferredValue, useMemo, useState, type ReactNode } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router'
+import { useDeferredValue, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Navigate, Outlet, useNavigate, useParams } from 'react-router'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
+import type { NoteDialogContext, NoteDialogLocationState } from '@/features/card-viewer/note-dialog-context'
 import type { NoteRow } from '@/features/package/note-row'
 import type { NoteTypeSummary, PackageSummary } from '@/features/package/package'
 import type { PackageClient } from '@/features/package/package-client'
@@ -34,7 +35,7 @@ import {
   type ColumnId,
 } from './filters'
 import { browsableNoteTypes, defaultNoteType } from './note-types'
-import { NotesTable } from './notes-table'
+import { NotesTable, type NotesTableHandle } from './notes-table'
 import { useNoteRows } from './use-note-rows'
 
 /** #/notes: go to the note type with the most notes. */
@@ -124,6 +125,9 @@ function NotesBrowser({
   )
   const { columns, info } = useMemo(() => buildColumns(noteType.fieldNames), [noteType.fieldNames])
   const facets = useMemo(() => computeFacets(rows), [rows])
+  const rowsById = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows])
+  const navigate = useNavigate()
+  const tableRef = useRef<NotesTableHandle>(null)
 
   const table = useReactTable({
     data: visibleRows,
@@ -150,6 +154,20 @@ function NotesBrowser({
       : [],
   )
   const narrowed = visibleRows.length !== rows.length
+
+  // The popup steps through notes in the table's current order.
+  const sortedRows = table.getRowModel().rows
+  const orderedIds = useMemo(() => sortedRows.map((row) => row.original.id), [sortedRows])
+  const dialogContext: NoteDialogContext = {
+    noteType,
+    orderedIds,
+    rowFor: (noteId) => rowsById.get(noteId),
+    onClosed: (noteId) => tableRef.current?.focusNote(noteId),
+  }
+  const openNote = (noteId: number) => {
+    const state: NoteDialogLocationState = { fromTable: true }
+    void navigate(`/notes/${String(noteType.id)}/${String(noteId)}`, { state })
+  }
 
   return (
     <>
@@ -203,6 +221,7 @@ function NotesBrowser({
         )}
       </div>
       <NotesTable
+        ref={tableRef}
         table={table}
         info={info}
         filters={filters}
@@ -211,7 +230,9 @@ function NotesBrowser({
         noteTypeName={noteType.name}
         onFilterChange={setFilter}
         onClearAll={clearAll}
+        onOpen={openNote}
       />
+      <Outlet context={dialogContext} />
     </>
   )
 }

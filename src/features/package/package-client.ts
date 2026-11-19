@@ -1,4 +1,7 @@
+import type { NoteTypeInfo } from './collection'
 import { PackageError } from './errors'
+import { MediaCache } from './media-cache'
+import type { NoteDetail } from './note-detail'
 import type { NoteRow } from './note-row'
 import type { PackageSummary } from './package'
 import type { PackageApi, WorkerResponse } from './worker-protocol'
@@ -19,7 +22,10 @@ let nextClientId = 1
 export class PackageClient {
   /** Distinguishes one opened file from the next, e.g. for React keys. */
   readonly id = nextClientId++
+  /** Media read from this package, as blobs and object URLs (revoked on dispose). */
+  readonly media = new MediaCache((name) => this.readMedia(name))
   private readonly worker: Worker
+  private readonly noteTypes = new Map<number, Promise<NoteTypeInfo | null>>()
   private readonly pending = new Map<number, Pending>()
   private nextId = 1
   private disposed = false
@@ -58,6 +64,20 @@ export class PackageClient {
     return this.call('getNotes', noteTypeId)
   }
 
+  getNote(noteId: number): Promise<NoteDetail | null> {
+    return this.call('getNote', noteId)
+  }
+
+  /** Note types don't change while a file is open, so each is fetched once. */
+  getNoteType(noteTypeId: number): Promise<NoteTypeInfo | null> {
+    let noteType = this.noteTypes.get(noteTypeId)
+    if (!noteType) {
+      noteType = this.call('getNoteType', noteTypeId)
+      this.noteTypes.set(noteTypeId, noteType)
+    }
+    return noteType
+  }
+
   readMedia(name: string): Promise<Blob | null> {
     return this.call('readMedia', name)
   }
@@ -66,6 +86,7 @@ export class PackageClient {
     if (this.disposed) return
     this.disposed = true
     this.worker.terminate()
+    this.media.dispose()
     this.failAll(new PackageError('internal', 'the file was closed'))
   }
 

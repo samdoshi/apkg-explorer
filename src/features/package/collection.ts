@@ -33,13 +33,13 @@ export interface DeckInfo {
 const IMAGE_OCCLUSION_STOCK_KIND = 6
 
 /** Runs a query and returns every row as an array of column values. */
-export function queryRows(db: Database, sql: string): unknown[][] {
-  const [result] = db.exec(sql)
+export function queryRows(db: Database, sql: string, params?: (string | number)[]): unknown[][] {
+  const [result] = db.exec(sql, params)
   return result?.values ?? []
 }
 
-const asNumber = (value: unknown): number => (typeof value === 'number' ? value : Number(value))
-const asString = (value: unknown): string =>
+export const asNumber = (value: unknown): number => (typeof value === 'number' ? value : Number(value))
+export const asString = (value: unknown): string =>
   typeof value === 'string' ? value : typeof value === 'number' ? String(value) : ''
 const asBytes = (value: unknown): Uint8Array =>
   value instanceof Uint8Array ? value : new Uint8Array(0)

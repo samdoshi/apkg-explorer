@@ -34,7 +34,13 @@ src/features/<name>/    code grouped by feature:
                         applied before the table sorts. Rows come from the worker
                         (getNotes -> NoteRow, plain text built by package/html-text.ts)
   overview/             #/overview: package summary (format, counts, note types, decks)
-  (to come: card-viewer, mathjax, media)
+  card-viewer/          #/notes/:noteTypeId/:noteId: the note popup, a child route of the table so
+                        Back closes it. template.ts + cloze.ts + template-filters.ts = Anki's
+                        template language; card-html.ts = reviewer extras (type answers, [sound:]);
+                        sanitize.ts + urls.ts = cleaning and script/web detection; card-document.ts =
+                        frame documents (CSP, sandbox, the loader used when scripts are allowed).
+                        Media blobs come from package/media-cache.ts (64 MB LRU, on the client)
+  (to come: mathjax, media)
 e2e/                    Playwright smoke tests; fixtures.ts has the guards, approved-storage.ts the
                         storage allow-list
 scripts/                Node scripts in TypeScript (run directly by Node 24); make_fixtures.py
@@ -54,6 +60,9 @@ test-results/screens/   screenshots from check:ui (1280x800); test-results/artif
 - Playwright browsers come from `$PLAYWRIGHT_BROWSERS_PATH` (chromium-1248, which matches
   `@playwright/test` 1.64.1). Never run `npx playwright install`. If the browser folders change,
   find the matching version from each playwright-core release's browsers.json and tell the user.
+- Playwright traces are kept on failure but without DOM snapshots: the snapshotter tries to run
+  code inside the script-free card frames, which Chromium logs as console errors ("Blocked script
+  execution in 'about:srcdoc'") and the smoke tests' guard would fail on.
 - Playwright's Firefox build works here; WebKit does not (it aborts with "Could not create EGL
   display"). `check:ui` is Chromium-only anyway; for a one-off Firefox run, use a temporary config
   that spreads `playwright.config.ts` and swaps `projects`.
@@ -114,7 +123,10 @@ Guardrails
 ## Dependencies
 
 Approved but not installed yet (install when the feature needs them, exact versions):
-`@mathjax/src` 4.1.3, `jsdom` 31.0.1 (dev).
+`@mathjax/src` 4.1.3.
+
+`jsdom` (dev) gives Vitest a DOM for the sanitiser tests: put `// @vitest-environment jsdom` at
+the top of a test file that needs one (the default environment is node).
 
 ESLint reports two warnings ("Compilation Skipped: Use of incompatible library") from
 `react-hooks/incompatible-library` for `useReactTable` and `useVirtualizer`. They only matter

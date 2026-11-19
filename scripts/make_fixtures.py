@@ -147,6 +147,9 @@ def quiz(nt_id: int) -> NoteType:
         "  for (var i = list.children.length; i >= 0; i--) {\n"
         "    list.appendChild(list.children[Math.random() * i | 0]);\n"
         "  }\n"
+        "  var done = document.createElement('p');\n"
+        "  done.textContent = 'Options shuffled by a script.';\n"
+        "  list.after(done);\n"
         "</script>"
     )
     return NoteType(

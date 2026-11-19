@@ -24,6 +24,12 @@ const api: PackageApi = {
   async getNotes(noteTypeId) {
     return Promise.resolve(requirePackage().notes(noteTypeId))
   },
+  async getNote(noteId) {
+    return Promise.resolve(requirePackage().note(noteId))
+  },
+  async getNoteType(noteTypeId) {
+    return Promise.resolve(requirePackage().noteType(noteTypeId))
+  },
   async readMedia(name) {
     return requirePackage().readMedia(name)
   },
@@ -35,6 +41,10 @@ function handle(request: WorkerRequest): Promise<unknown> {
       return api.open(...request.args)
     case 'getNotes':
       return api.getNotes(...request.args)
+    case 'getNote':
+      return api.getNote(...request.args)
+    case 'getNoteType':
+      return api.getNoteType(...request.args)
     case 'readMedia':
       return api.readMedia(...request.args)
   }

@@ -1,6 +1,6 @@
 import { flexRender, type Table } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent, type Ref } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { NoteRow } from '@/features/package/note-row'
@@ -15,7 +15,13 @@ const HEADER_HEIGHT = 41
 /** The pinned first column never takes more than 40% of a narrow screen. */
 const columnWidth = (size: number, pinned: boolean) => (pinned ? `min(${String(size)}px, 40vw)` : size)
 
+export interface NotesTableHandle {
+  /** Scrolls to a note's row and focuses it (e.g. after its popup closes). */
+  focusNote: (noteId: number) => void
+}
+
 interface NotesTableProps {
+  ref?: Ref<NotesTableHandle>
   table: Table<NoteRow>
   info: Map<string, ColumnInfo>
   filters: ColumnFilters
@@ -24,9 +30,12 @@ interface NotesTableProps {
   noteTypeName: string
   onFilterChange: (columnId: ColumnId, filter: ColumnFilter | null) => void
   onClearAll: () => void
+  /** Opens a note's popup (click, or Enter on a focused row). */
+  onOpen: (noteId: number) => void
 }
 
 export function NotesTable({
+  ref,
   table,
   info,
   filters,
@@ -35,6 +44,7 @@ export function NotesTable({
   noteTypeName,
   onFilterChange,
   onClearAll,
+  onOpen,
 }: NotesTableProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const rows = table.getRowModel().rows
@@ -55,14 +65,19 @@ export function NotesTable({
   const paddingTop = items.length ? (items[0]?.start ?? 0) - HEADER_HEIGHT : 0
   const paddingBottom = items.length ? virtualizer.getTotalSize() - (items.at(-1)?.end ?? 0) : 0
 
-  // After keyboard navigation, focus the target row once it has been rendered.
-  useEffect(() => {
-    if (pendingFocus.current === null) return
+  /** Focuses the pending row if it's rendered; false if it isn't (yet). */
+  function focusPending(): boolean {
+    if (pendingFocus.current === null) return true
     const row = scrollRef.current?.querySelector<HTMLElement>(`[data-index="${String(pendingFocus.current)}"]`)
-    if (row) {
-      row.focus({ preventScroll: true })
-      pendingFocus.current = null
-    }
+    if (!row) return false
+    row.focus({ preventScroll: true })
+    pendingFocus.current = null
+    return true
+  }
+
+  // A row scrolled into view by keyboard navigation gets focus once it's rendered.
+  useEffect(() => {
+    focusPending()
   })
 
   function moveTo(index: number) {
@@ -71,9 +86,27 @@ export function NotesTable({
     setActiveIndex(next)
     pendingFocus.current = next
     virtualizer.scrollToIndex(next)
+    // Already rendered (e.g. the row a popup was opened from): focus it now, as
+    // nothing may re-render to run the effect above.
+    focusPending()
   }
 
+  useImperativeHandle(ref, () => ({
+    focusNote(noteId) {
+      const index = rows.findIndex((row) => row.original.id === noteId)
+      if (index >= 0) moveTo(index)
+    },
+  }))
+
   function handleKeyDown(event: KeyboardEvent<HTMLTableSectionElement>) {
+    if (event.key === 'Enter' && !event.altKey && !event.metaKey && !event.ctrlKey) {
+      const row = rows[current]
+      if (row) {
+        event.preventDefault()
+        onOpen(row.original.id)
+      }
+      return
+    }
     const page = Math.max(1, Math.floor((scrollRef.current?.clientHeight ?? 400) / ROW_HEIGHT) - 1)
     const moves: Record<string, number> = {
       ArrowDown: current + 1,
@@ -142,8 +175,9 @@ export function NotesTable({
                 }}
                 onClick={() => {
                   setActiveIndex(item.index)
+                  onOpen(row.original.id)
                 }}
-                className="group outline-none focus-visible:[&>td]:bg-accent"
+                className="group cursor-pointer outline-none focus-visible:[&>td]:bg-accent"
                 style={{ height: ROW_HEIGHT }}
               >
                 {row.getVisibleCells().map((cell, index) => {

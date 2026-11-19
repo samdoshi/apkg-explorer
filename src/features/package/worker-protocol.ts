@@ -1,4 +1,6 @@
+import type { NoteTypeInfo } from './collection'
 import type { PackageErrorInfo } from './errors'
+import type { NoteDetail } from './note-detail'
 import type { NoteRow } from './note-row'
 import type { PackageSummary } from './package'
 
@@ -6,6 +8,8 @@ import type { PackageSummary } from './package'
 export interface PackageApi {
   open(file: File): Promise<PackageSummary>
   getNotes(noteTypeId: number): Promise<NoteRow[]>
+  getNote(noteId: number): Promise<NoteDetail | null>
+  getNoteType(noteTypeId: number): Promise<NoteTypeInfo | null>
   readMedia(name: string): Promise<Blob | null>
 }
 

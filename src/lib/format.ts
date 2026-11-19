@@ -16,3 +16,10 @@ export function formatBytes(bytes: number): string {
   const digits = value < 10 ? 1 : 0
   return `${value.toFixed(digits)} ${units[unit] ?? 'TB'}`
 }
+
+const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' })
+
+/** A date (ms since epoch) in the browser's locale, e.g. "3 Feb 2024". */
+export function formatDate(ms: number): string {
+  return dateFormat.format(ms)
+}

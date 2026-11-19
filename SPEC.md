@@ -69,14 +69,18 @@ messages we need are decoded by a small hand-written decoder (no protobuf librar
 - Rows are virtualised so tens of thousands of notes scroll smoothly.
 - Mobile: the table scrolls horizontally with the first field column pinned.
 - Keyboard: rows are focusable; ↑/↓, Page Up/Down, Home and End move between rows, Enter
-  opens the popup (step 3).
+  opens the popup (step 3). Clicking a row opens it too; when the popup closes, focus returns to
+  the row of the note it was last showing.
 
 ## 3. Card popup (`#/notes/:notetypeId/:noteId`)
 
 Opening a note puts its id in the URL, so the browser Back button (and the Android back gesture)
 closes the popup.
 
-- Dialog on desktop, full screen on mobile. Title is the note's sort field.
+- Dialog on desktop, full screen on mobile. Title is the note's sort field (clozes revealed).
+  _Each side is a fixed-height frame that scrolls inside, rather than one that grows to fit: many
+  decks size cards with `vh` units (e.g. `min-height: 100vh`), which would make a frame that
+  sizes itself to its content grow without end._
 - **Tabs**: one per card the note actually has in the file (template name, or "Cloze 1",
   "Cloze 2", …), plus a **Note** tab.
 - Each card tab shows **Front** and **Back** side by side (stacked on narrow screens). The back
@@ -91,6 +95,9 @@ closes the popup.
   and a download link instead.
 - Night mode: when the system is dark, the card body gets Anki's `nightMode night_mode` classes
   so deck CSS that supports night mode works; otherwise the deck's own colours are kept.
+  _As in Anki's reviewer, night mode also gives the body Anki's dark background and text
+  colours, which override the stock `.card { color: black; background-color: white }`; deck rules
+  such as `.card.nightMode` still win._
 
 ### Template rendering
 
@@ -101,7 +108,9 @@ Implemented: `{{Field}}`, `{{#Field}}…{{/Field}}`, `{{^Field}}…{{/Field}}`, 
 `{{furigana:}}`, `{{kana:}}`, `{{kanji:}}`, and the special fields `Tags`, `Type`, `Deck`,
 `Subdeck`, `Card`, `CardFlag`. `{{tts …}}` shows its text (not spoken). Unknown filters pass the
 field through unchanged. Media referenced from the deck CSS (e.g. `_font.ttf` in `@font-face`)
-is loaded from the package.
+is loaded from the package. _Also `{{CardID}}`, `{{c1,2::…}}` clozes, `{{#c2}}…{{/c2}}`, and
+the old `{{=<% %>=}}` delimiters. A missing field or a broken template shows Anki's own error
+message in place of that side, as Anki does._
 
 ### Safety: scripts and web content
 
@@ -118,6 +127,15 @@ Cards render in a sandboxed `<iframe>` with its own Content-Security-Policy.
   or reloads. It is never saved.
 - Allowed scripts still run in a sandbox with an opaque origin: they cannot reach the app, the
   package, or other cards.
+- _How it works: with scripts blocked, the frame's sandbox has no `allow-scripts`, so nothing in
+  it can run, and it keeps the app's origin so it can show the app's `blob:` URLs for media. With
+  scripts allowed it gets `allow-scripts` and an opaque origin. Such a frame can't use the app's
+  `blob:` URLs (Chrome and Firefox both refuse), so a small loader inside it receives the card's
+  media files by `postMessage` and makes its own._
+- _Links (`<a href="https://…">`) are not web content: nothing loads until they're clicked, and
+  then they open in a new tab._
+- _Limit: an allowed script can still send its own frame to a website (browsers have no setting
+  that stops a frame navigating itself), so allow scripts only for decks you trust._
 
 ### MathJax
 
@@ -201,7 +219,8 @@ A second tab in the header, next to Notes.
   needed).
 - `npm run check:ui`: build, then Playwright (Chromium only) against `vite preview`; 5–10 smoke
   tests, each failing on any console error or request to another origin; screenshots of key
-  screens at 1280×800 to `test-results/screens/`.
+  screens at 1280×800 to `test-results/screens/`. _Traces on failure have no DOM snapshots:
+  taking them logs console errors inside the script-free card frames._
 - GitHub Actions: on push to `main`, run `npm run check`, build, deploy to GitHub Pages.
   Vite `base` is `/apkg-explorer/`.
 

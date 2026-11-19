@@ -62,8 +62,8 @@ test('column filters show as chips and rows work from the keyboard', async ({ pa
   await page.getByRole('button', { name: 'Clear all' }).click()
   await expect(dataRows(page)).toHaveCount(6)
 
-  // Rows are focusable; arrow keys, Home and End move between them.
-  await dataRows(page).first().click()
+  // Rows are focusable; arrow keys, Home and End move between them. (A click opens the note.)
+  await dataRows(page).first().focus()
   await page.keyboard.press('ArrowDown')
   await expect(dataRows(page).nth(1)).toBeFocused()
   await page.keyboard.press('End')
@@ -82,7 +82,7 @@ test('large decks render only the visible rows', async ({ page }) => {
   await expect(dataRows(page).first()).toContainText('Word 0001')
   expect(await dataRows(page).count()).toBeLessThan(100)
 
-  await dataRows(page).first().click()
+  await dataRows(page).first().focus()
   await page.keyboard.press('End')
   const last = page.getByRole('row', { name: /Word 5000/ })
   await expect(last).toBeFocused()
