@@ -20,9 +20,9 @@ test('sample deck opens to its notes and overview, and a reload forgets it', asy
   await expect(page.getByRole('heading', { level: 1, name: 'sample.apkg' })).toBeVisible()
   await expect(page.getByText('Anki 2.1.50+ format')).toBeVisible()
   const totals = page.getByRole('list', { name: 'Totals' })
-  await expect(totals).toContainText('22 notes')
-  await expect(totals).toContainText('35 cards')
-  await expect(totals).toContainText('16 media files')
+  await expect(totals).toContainText('23 notes')
+  await expect(totals).toContainText('36 cards')
+  await expect(totals).toContainText('17 media files')
   const noteTypes = page.getByRole('region', { name: 'Note types' })
   await expect(noteTypes.getByRole('heading', { level: 3 })).toHaveText([
     'Basic',

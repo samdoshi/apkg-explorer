@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import { expect, expectOnlyApprovedStorage, saveScreen, test } from './fixtures.ts'
+import { expect, expectOnlyApprovedStorage, saveScreen, saveSettledScreen, test } from './fixtures.ts'
 
 async function openSample(page: Page, noteType: RegExp) {
   await page.goto('./')
@@ -80,7 +80,7 @@ test('scripts and web content stay blocked, with a notice, until allowed', async
 
   // A web image is replaced by a placeholder; so is a file the package doesn't have.
   await page.getByRole('combobox', { name: 'Note type' }).click()
-  await page.getByRole('option', { name: /^Basic 7 notes/ }).click()
+  await page.getByRole('option', { name: /^Basic 8 notes/ }).click()
   await page.getByRole('cell', { name: 'This card shows an image from the web.' }).click()
   const back = page.getByTitle('Back of Card 1').contentFrame()
   await expect(dialog.getByText('This card loads content from example.com (blocked).')).toBeVisible()
@@ -98,14 +98,18 @@ test('scripts and web content stay blocked, with a notice, until allowed', async
   await expectOnlyApprovedStorage(page)
 })
 
-test('maths is typeset by MathJax, which loads only when a card has maths', async ({ page }) => {
+test('video plays inline, and maths is typeset by MathJax, which loads only for maths', async ({ page }) => {
   const engine: string[] = []
   page.on('request', (request) => {
     if (/\/mathjax-engine-[^/]+\.js$/.test(request.url())) engine.push(request.url())
   })
-  await openSample(page, /^Basic 7 notes/)
-  await page.getByRole('cell', { name: 'What is the chemical symbol for gold?' }).click()
-  await expect(page.getByTitle('Back of Card 1').contentFrame().getByText('Au (from Latin aurum)')).toBeVisible()
+  await openSample(page, /^Basic 8 notes/)
+  // A video in a [sound:] tag gets a player on the card. No maths here, so no MathJax.
+  await page.getByRole('cell', { name: /^Which fractal is this\?/ }).click()
+  const front = page.getByTitle('Front of Card 1').contentFrame()
+  await expect.poll(() => front.getByLabel('Video: mandelbrot.webm').evaluate(mediaDuration)).toBeCloseTo(4, 1)
+  await expect(page.getByTitle('Back of Card 1').contentFrame().getByText('The Mandelbrot set')).toBeVisible()
+  await saveSettledScreen(page.getByRole('dialog'), 'card-video')
   expect(engine).toEqual([])
   await page.keyboard.press('Escape')
 

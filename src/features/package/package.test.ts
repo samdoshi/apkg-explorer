@@ -31,10 +31,10 @@ describe('current format (collection.anki21b)', () => {
     const summary = pkg.summary()
     expect(summary.format).toBe('anki21b')
     expect(summary.schemaVersion).toBe(18)
-    expect(summary.noteCount).toBe(22)
-    expect(summary.cardCount).toBe(35)
+    expect(summary.noteCount).toBe(23)
+    expect(summary.cardCount).toBe(36)
     expect(summary.noteTypes.map((t) => [t.name, t.noteCount, t.cardCount])).toEqual([
-      ['Basic', 7, 7],
+      ['Basic', 8, 8],
       ['Basic (and reversed card)', 4, 8],
       ['Basic (type in the answer)', 1, 1],
       ['Cloze', 3, 6],
@@ -49,19 +49,19 @@ describe('current format (collection.anki21b)', () => {
     expect(summary.decks.map((d) => [d.name, d.cardCount])).toEqual([
       ['Sample::Geography', 14],
       ['Sample::Languages', 10],
-      ['Sample::Science', 11],
+      ['Sample::Science', 12],
     ])
     pkg.close()
   })
 
   it('lists media and decompresses files on demand', async () => {
     const pkg = await open('sample.apkg')
-    expect(pkg.summary().mediaCount).toBe(16)
+    expect(pkg.summary().mediaCount).toBe(17)
     const flag = pkg.mediaFiles().find((m) => m.name === 'flag-japan.png')
     expect(flag?.size).toBeGreaterThan(100)
     // The media browser's list: names and sizes only.
     const list = pkg.mediaList()
-    expect(list).toHaveLength(16)
+    expect(list).toHaveLength(17)
     expect(list.find((m) => m.name === 'flag-japan.png')).toEqual({ name: 'flag-japan.png', size: flag?.size })
 
     const png = await pkg.readMedia('flag-japan.png')
@@ -74,6 +74,10 @@ describe('current format (collection.anki21b)', () => {
     expect(new TextDecoder().decode(wav.subarray(0, 4))).toBe('RIFF')
     const svg = new TextDecoder().decode(await bytesOf(await pkg.readMedia('_globe.svg')))
     expect(svg).toContain('<svg')
+    // The video (a WebM file starts with the EBML magic number).
+    const webm = await pkg.readMedia('mandelbrot.webm')
+    expect(webm?.type).toBe('video/webm')
+    expect([...(await bytesOf(webm)).subarray(0, 4)]).toEqual([0x1a, 0x45, 0xdf, 0xa3])
 
     expect(await pkg.readMedia('missing-picture.png')).toBeNull()
     // Percent-encoded names in the HTML find the file too.

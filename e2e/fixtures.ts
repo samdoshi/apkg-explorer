@@ -78,6 +78,17 @@ export async function saveScreen(target: Page | Locator, name: string) {
   })
 }
 
+/**
+ * saveScreen for a screen that settles by itself: Chrome's video player shows a loading
+ * spinner for about a second after the video has loaded (and freezing animations would
+ * keep it). Waits until two screenshots in a row are the same, then saves.
+ */
+export async function saveSettledScreen(target: Page | Locator, name: string) {
+  const shot = () => target.screenshot({ caret: 'hide' })
+  await expect.poll(async () => (await shot()).equals(await shot()), { timeout: 10_000 }).toBe(true)
+  await saveScreen(target, name)
+}
+
 /** Absolute path of a generated test deck in fixtures/. */
 export const fixturePath = (name: string) => join(import.meta.dirname, '..', 'fixtures', name)
 

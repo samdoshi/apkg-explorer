@@ -1,4 +1,4 @@
-import { expect, expectOnlyApprovedStorage, saveScreen, test } from './fixtures.ts'
+import { expect, expectOnlyApprovedStorage, saveScreen, saveSettledScreen, test } from './fixtures.ts'
 
 const mediaDuration = (element: HTMLElement | SVGElement) =>
   element instanceof HTMLMediaElement ? element.duration : 0
@@ -10,9 +10,9 @@ test('the media list filters, sorts and previews files, which download and close
 
   await expect(page).toHaveURL(/#\/media$/)
   const status = page.getByRole('status')
-  await expect(status).toHaveText(/^16 files · \d+ KB$/)
+  await expect(status).toHaveText(/^17 files · \d+ KB$/)
   const kinds = page.getByRole('radiogroup', { name: 'Kind' })
-  await expect(kinds.getByRole('radio')).toHaveText(['All 16', 'Images 9', 'Audio 6', 'Other 1'])
+  await expect(kinds.getByRole('radio')).toHaveText(['All 17', 'Images 9', 'Audio 6', 'Video 1', 'Other 1'])
   const table = page.getByRole('table', { name: 'Media files' })
   const rows = table.getByRole('row')
   await expect(rows.nth(1)).toContainText('_globe.svg')
@@ -20,7 +20,7 @@ test('the media list filters, sorts and previews files, which download and close
 
   // Images only, smallest first.
   await kinds.getByRole('radio', { name: /^Images/ }).click()
-  await expect(status).toHaveText(/^Showing 9 files of 16 · /)
+  await expect(status).toHaveText(/^Showing 9 files of 17 · /)
   await table.getByRole('button', { name: 'Size' }).click()
   await expect(rows.nth(1)).toContainText('flag-germany.png')
 
@@ -47,7 +47,15 @@ test('the media list filters, sorts and previews files, which download and close
   await expect(dialog).toHaveCount(0)
   await expect(table.getByRole('row', { name: /^_waves\.svg/ })).toBeFocused()
 
-  // Audio plays in the preview; Back closes it.
+  // Video and audio play in the preview; Back closes it.
+  await kinds.getByRole('radio', { name: /^Video/ }).click()
+  await rows.nth(1).click()
+  dialog = page.getByRole('dialog', { name: 'mandelbrot.webm' })
+  await expect(dialog.getByText('Video · WEBM · 75 KB · File 1 of 1')).toBeVisible()
+  await expect.poll(() => dialog.getByLabel('Video player for mandelbrot.webm').evaluate(mediaDuration)).toBeCloseTo(4, 1)
+  await saveSettledScreen(dialog, 'media-video')
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
   await kinds.getByRole('radio', { name: /^All/ }).click()
   const search = page.getByRole('searchbox', { name: 'Search media' })
   await search.fill('chime GER')
@@ -70,6 +78,6 @@ test('the media list filters, sorts and previews files, which download and close
   await search.fill('no such file')
   await expect(page.getByText('No files match the search and filter.')).toBeVisible()
   await page.getByRole('button', { name: 'Clear search and filter' }).click()
-  await expect(status).toHaveText(/^16 files/)
+  await expect(status).toHaveText(/^17 files/)
   await expectOnlyApprovedStorage(page)
 })

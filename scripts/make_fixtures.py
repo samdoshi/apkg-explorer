@@ -5,6 +5,8 @@
 
 Output is deterministic: re-running only changes files when this script changes.
 Uses only the Python standard library (sqlite3, zipfile, compression.zstd needs 3.14+).
+The sample deck's video, scripts/media/mandelbrot.webm, is committed; scripts/make_video.sh
+(ffmpeg) remakes it.
 
 Packages written (see SPEC.md section 1 for the formats):
   fixtures/sample.apkg              current format: collection.anki21b (zstd, schema 18),
@@ -36,6 +38,7 @@ from compression import zstd
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "fixtures"
+MEDIA = Path(__file__).resolve().parent / "media"  # media files made by other tools (committed)
 BASE_MS = 1_709_251_200_000  # 2024-03-01T00:00:00Z: note/card ids count up from here
 CRT = BASE_MS // 1000 - 30 * 86400  # collection creation time (seconds)
 ZIP_DATE = (2024, 3, 1, 0, 0, 0)
@@ -601,7 +604,7 @@ def sample_package() -> Package:
     nt_basic, nt_rev, nt_type = basic(1_700_000_000_001), basic_reversed(1_700_000_000_002), basic_typing(1_700_000_000_003)
     nt_cloze, nt_country, nt_quiz = cloze(1_700_000_000_004), country(1_700_000_000_005), quiz(1_700_000_000_006)
     media: dict[str, bytes] = {"_globe.svg": GLOBE_SVG, "_waves.svg": WAVES_SVG, "water.svg": WATER_SVG,
-                               "_shuffle.js": SHUFFLE_JS}
+                               "_shuffle.js": SHUFFLE_JS, "mandelbrot.webm": (MEDIA / "mandelbrot.webm").read_bytes()}
     notes: list[Note] = []
 
     for i, (name, capital, flag, chime, tags, extra) in enumerate(COUNTRIES):
@@ -623,6 +626,9 @@ def sample_package() -> Package:
         Note(nt_basic, ["Solve \\(x^2 = 9\\).", "\\(x = \\pm 3\\)"], science, ["maths"]),
         Note(nt_basic, ["Speed of light in a vacuum?", "299&nbsp;792&nbsp;458 m/s"], science, ["science::physics"],
              {0: Review(4, 2300, 3, 1)}),
+        # A video in a [sound:] tag, as Anki stores one: it plays inline on the card.
+        Note(nt_basic, ["Which fractal is this?<br>[sound:mandelbrot.webm]", "The Mandelbrot set"], science,
+             ["maths"]),
         Note(nt_cloze, ["The {{c1::mitochondrion}} is the {{c2::powerhouse}} of the cell.", "Biology 101"],
              science, ["science::biology"]),
         Note(nt_cloze, ["{{c1::Photosynthesis turns {{c2::light}} energy}} into chemical energy.", ""],

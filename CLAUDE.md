@@ -15,6 +15,7 @@ Saved-data approvals live in AGENTS.md:
 | `npm run build` / `npm run preview` | Production build / serve it at http://localhost:4173/apkg-explorer/ |
 | `npx playwright test e2e/smoke.spec.ts` | One spec file (needs a fresh `npm run build` first) |
 | `npm run fixtures` | Rebuild the synthetic decks in `fixtures/` (`scripts/make_fixtures.py`, deterministic) |
+| `scripts/make_video.sh` | Remake `scripts/media/mandelbrot.webm`, the sample deck's video (ffmpeg; the clip is committed, so only needed to change it) |
 
 ## Folder layout
 
@@ -51,7 +52,8 @@ src/features/<name>/    code grouped by feature:
                         name URI-encoded; files come through package/media-cache.ts)
 e2e/                    Playwright smoke tests; fixtures.ts has the guards, approved-storage.ts the
                         storage allow-list
-scripts/                Node scripts in TypeScript (run directly by Node 24); make_fixtures.py
+scripts/                Node scripts in TypeScript (run directly by Node 24); make_fixtures.py;
+                        media/ = committed media made by other tools (make_video.sh)
 fixtures/               generated test decks (committed): sample.apkg (current format, also the
                         in-app sample), legacy-anki2.apkg, legacy-anki21.apkg (WAL header),
                         collection.colpkg, large.apkg (5,000 notes), invalid/*. fixtures/real/ = the user's real decks
@@ -62,7 +64,7 @@ test-results/screens/   screenshots from check:ui (1280x800); test-results/artif
 
 ## Environment
 
-- NixOS bubblewrap sandbox. Node 24, npm, git, Python 3 available. Check anything else with
+- NixOS bubblewrap sandbox. Node 24, npm, git, Python 3 and ffmpeg available. Check anything else with
   `command -v` and ask the user before relying on it. Never install software globally, never use
   Nix commands, never download binaries.
 - Playwright browsers come from `$PLAYWRIGHT_BROWSERS_PATH` (chromium-1248, which matches

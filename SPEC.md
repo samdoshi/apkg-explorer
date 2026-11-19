@@ -243,7 +243,8 @@ _As built (step 5):_
   ```
 - **Test decks**: `scripts/make_fixtures.py` (Python standard library only: `sqlite3`, `zipfile`,
   `compression.zstd`) builds small decks in all three formats with Basic, Basic-and-reversed,
-  Cloze, type-in, MathJax and custom notes, generated PNG flags, SVGs and WAV chimes, a card
+  Cloze, type-in, MathJax and custom notes, generated PNG flags, SVGs and WAV chimes, a WebM
+  video (a Mandelbrot zoom made once by `scripts/make_video.sh` with ffmpeg and committed), a card
   with a `<script>`, a card referencing a web image and one referencing a missing file. Output
   is deterministic. `fixtures/sample.apkg` is also the in-app sample deck. Vitest also runs
   against any files in `fixtures/real/`. _Changed from the Node script first planned: Python's
