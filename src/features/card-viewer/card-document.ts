@@ -4,17 +4,23 @@ import { ContentCleaner, mergeReports, type ContentReport } from './sanitize'
 /*
  * Builds the HTML documents shown in card frames.
  *
- * Scripts blocked (the default): the frame is sandboxed without allow-scripts, so
- * nothing in it can run. It keeps the app's origin, which lets it use the app's blob:
- * URLs for package media.
+ * Every frame is sandboxed with allow-scripts but not allow-same-origin, so it has an
+ * opaque origin: nothing in it can reach the app, the package or other cards. An opaque
+ * origin can't load the app's blob: URLs, so the frame starts with a small loader that
+ * receives the card and its media files by postMessage, makes its own blob: URLs and
+ * writes the card into itself. Keys the popup handles come back the same way.
  *
- * Scripts allowed: the frame gets allow-scripts and therefore an opaque origin, so its
- * scripts can't reach the app or the package. An opaque origin can't load the app's
- * blob: URLs, so the frame starts with a small loader that receives the media files by
- * postMessage, makes its own blob: URLs and writes the card into itself.
+ * Scripts blocked (the default): the cleaner removes scripts and inline handlers, the
+ * first document's Content-Security-Policy lets only the loader run (it carries the
+ * frame's random nonce), and the card document's own policy forbids scripts outright.
+ * Scripts allowed: both policies let the card's scripts run.
  *
- * Either way the Content-Security-Policy only lets the card load package media (and,
- * if allowed, content from the web).
+ * Why not a frame without allow-scripts when scripts are blocked: Safari draws its audio
+ * and video controls with JavaScript, which can't run in such a frame, and it doesn't call
+ * the app's event listeners on one either.
+ *
+ * Either way the policy only lets the card load package media (and, if allowed, content
+ * from the web).
  */
 
 export interface FrameContent {
@@ -40,12 +46,13 @@ export interface FrameOptions {
 }
 
 export interface FrameDocument {
-  /** A fresh value for each document; use it as the frame's React key. */
+  /** A fresh random value for each document (also the loader's nonce); use it as the frame's React key. */
   token: string
+  /** The loader. */
   srcdoc: string
   sandbox: string
-  /** When scripts are allowed: what the loader inside the frame is sent. */
-  payload: { html: string; media: Blob[] } | null
+  /** What the loader is sent: the card's HTML, and the media files its placeholders stand for. */
+  payload: { html: string; media: Blob[] }
 }
 
 /** Where findings in the note type's CSS are said to be. */
@@ -63,15 +70,23 @@ export function scanContent(contents: FrameContent[]): ContentReport {
   )
 }
 
-export function cardCsp({ allowScripts, allowWeb }: Pick<FrameOptions, 'allowScripts' | 'allowWeb'>): string {
+/**
+ * The frame's policy. `loaderNonce` is for the loader's own document: with scripts
+ * blocked, it lets the loader (and nothing else) run.
+ */
+export function cardCsp(
+  { allowScripts, allowWeb }: Pick<FrameOptions, 'allowScripts' | 'allowWeb'>,
+  loaderNonce?: string,
+): string {
   const web = allowWeb ? ' https: http:' : ''
+  const blockedScripts = loaderNonce === undefined ? "script-src 'none'" : `script-src 'nonce-${loaderNonce}'`
   return [
     "default-src 'none'",
     `img-src blob: data:${web}`,
     `media-src blob: data:${web}`,
     `font-src blob: data:${web}`,
     `style-src 'unsafe-inline' blob:${web}`,
-    allowScripts ? `script-src 'unsafe-inline' blob:${web}` : "script-src 'none'",
+    allowScripts ? `script-src 'unsafe-inline' blob:${web}` : blockedScripts,
     allowWeb ? `frame-src${web}` : "frame-src 'none'",
     allowWeb && allowScripts ? `connect-src${web}` : "connect-src 'none'",
     "form-action 'none'",
@@ -129,7 +144,10 @@ function head(csp: string, colorScheme: string): string {
   )
 }
 
-/** The loader for frames that run scripts. `token` is random hex, safe to inline. */
+/**
+ * The loader at the start of every frame. `token` is random hex, safe to inline. Escape
+ * and [ ] go to the popup, except [ ] typed into the card (a type-answer box).
+ */
 function loaderScript(token: string): string {
   return `(() => {
   const token = '${token}';
@@ -143,49 +161,54 @@ function loaderScript(token: string): string {
     document.write(html);
     document.close();
     document.addEventListener('keydown', (key) => {
-      if (['Escape', '[', ']'].includes(key.key)) parent.postMessage({ token, type: 'key', key: key.key }, '*');
+      if (key.altKey || key.ctrlKey || key.metaKey || !['Escape', '[', ']'].includes(key.key)) return;
+      const target = key.target;
+      const typing = target instanceof Element && (target.isContentEditable || target.matches('input, textarea, select'));
+      if (typing && key.key !== 'Escape') return;
+      key.preventDefault();
+      parent.postMessage({ token, type: 'key', key: key.key }, '*');
     });
   });
   parent.postMessage({ token, type: 'ready' }, '*');
 })();`
 }
 
-/** Builds one frame's document, using the media the content needs (already loaded). */
-export function buildFrame(content: FrameContent, options: FrameOptions, media: MediaHandle): FrameDocument {
+/** Builds one frame's documents, using the media the content needs (already loaded). */
+export function buildFrame(
+  content: FrameContent,
+  options: FrameOptions,
+  media: Pick<MediaHandle, 'blob'>,
+): FrameDocument {
   const token = randomToken()
   const blobs: Blob[] = []
   const indexes = new Map<string, number>()
-  // With scripts allowed, media is referenced by placeholder tokens that the loader
-  // swaps for blob: URLs it creates inside the frame.
-  const mediaUrl = options.allowScripts
-    ? (name: string) => {
-        const blob = media.blob(name)
-        if (!blob) return null
-        let index = indexes.get(name)
-        if (index === undefined) {
-          index = blobs.push(blob) - 1
-          indexes.set(name, index)
-        }
-        return `apkg-media-${token}-${String(index)}`
-      }
-    : (name: string) => media.url(name)
+  // Media is referenced by placeholders that the loader swaps for blob: URLs it makes.
+  const mediaUrl = (name: string) => {
+    const blob = media.blob(name)
+    if (!blob) return null
+    let index = indexes.get(name)
+    if (index === undefined) {
+      index = blobs.push(blob) - 1
+      indexes.set(name, index)
+    }
+    return `apkg-media-${token}-${String(index)}`
+  }
   const cleaner = new ContentCleaner({ ...options, mediaUrl })
   const body = content.layout(content.parts.map((part) => cleaner.html(part.html, part.label)))
   const css = cleaner.css(content.css, CSS_LABEL)
 
-  const csp = cardCsp(options)
   const colorScheme = options.nightMode ? 'dark' : 'light'
   const html =
-    `<!doctype html><html${options.nightMode ? ' class="night-mode"' : ''}><head>${head(csp, colorScheme)}` +
+    `<!doctype html><html${options.nightMode ? ' class="night-mode"' : ''}><head>${head(cardCsp(options), colorScheme)}` +
     `<style>${BASE_CSS}${styleText(content.appCss ?? '')}</style><style>${styleText(css)}</style></head>` +
     `<body class="${content.bodyClass}${options.nightMode ? ' nightMode night_mode' : ''}">${body}</body></html>`
 
-  if (!options.allowScripts) {
-    return { token, srcdoc: html, sandbox: `allow-same-origin ${SANDBOX_BASE}`, payload: null }
-  }
+  // The loader's policy stays in force after it writes the card (which adds the card's own),
+  // so apart from the nonce it's the card's policy.
+  const loaderHead = head(cardCsp(options, token), colorScheme)
   return {
     token,
-    srcdoc: `<!doctype html><html><head>${head(csp, colorScheme)}<script>${loaderScript(token)}</script></head></html>`,
+    srcdoc: `<!doctype html><html><head>${loaderHead}<script nonce="${token}">${loaderScript(token)}</script></head></html>`,
     sandbox: `allow-scripts ${SANDBOX_BASE}`,
     payload: { html, media: blobs },
   }

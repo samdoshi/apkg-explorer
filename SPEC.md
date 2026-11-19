@@ -118,8 +118,8 @@ Cards render in a sandboxed `<iframe>` with its own Content-Security-Policy.
 
 - **By default**: scripts and inline event handlers are removed before rendering, and any
   reference to the web (`http(s)://…` in `src`, `href`, `srcset`, CSS `url()`/`@import`) is
-  replaced with a "blocked" placeholder. Only media from the package loads. The iframe sandbox
-  and CSP block anything the clean-up misses.
+  replaced with a "blocked" placeholder. Only media from the package loads. The frame's CSP
+  blocks anything the clean-up misses.
 - **When detected**, a notice above the card says what was blocked, e.g. "This card has scripts
   (blocked) — Allow scripts" and "This card loads content from fonts.googleapis.com,
   example.com (blocked) — Allow web content". The two permissions are separate.
@@ -137,11 +137,17 @@ Cards render in a sandboxed `<iframe>` with its own Content-Security-Policy.
   or reloads. It is never saved.
 - Allowed scripts still run in a sandbox with an opaque origin: they cannot reach the app, the
   package, or other cards.
-- _How it works: with scripts blocked, the frame's sandbox has no `allow-scripts`, so nothing in
-  it can run, and it keeps the app's origin so it can show the app's `blob:` URLs for media. With
-  scripts allowed it gets `allow-scripts` and an opaque origin. Such a frame can't use the app's
-  `blob:` URLs (Chrome and Firefox both refuse), so a small loader inside it receives the card's
-  media files by `postMessage` and makes its own._
+- _How it works: every frame is sandboxed with `allow-scripts` but not `allow-same-origin`, so it
+  has an opaque origin and nothing in it can reach the app, the package or other cards. A small
+  loader inside it receives the card and its media files by `postMessage`, makes its own `blob:`
+  URLs (an opaque origin can't use the app's) and writes the card in. With scripts blocked, the
+  loader's CSP lets only the loader itself run (by a random nonce), and the card's own CSP
+  forbids scripts outright, so a script the clean-up missed is refused twice over. With scripts
+  allowed, both policies let the card's scripts run._
+- _Changed after step 5: blocked-script frames used to have no `allow-scripts` at all. Safari
+  draws its audio and video controls with JavaScript, which can't run in such a frame (so sounds
+  didn't play), and it doesn't call the app's listeners on one either (so Escape and `[` `]` did
+  nothing inside a card). The frames also allow full screen, for videos._
 - _Links (`<a href="https://…">`) are not web content: nothing loads until they're clicked, and
   then they open in a new tab._
 - _Limit: an allowed script can still send its own frame to a website (browsers have no setting
@@ -263,8 +269,7 @@ _As built (step 5):_
   needed).
 - `npm run check:ui`: build, then Playwright (Chromium only) against `vite preview`; 5–10 smoke
   tests, each failing on any console error or request to another origin; screenshots of key
-  screens at 1280×800 to `test-results/screens/`. _Traces on failure have no DOM snapshots:
-  taking them logs console errors inside the script-free card frames._
+  screens at 1280×800 to `test-results/screens/`.
 - GitHub Actions: on push to `main`, run `npm run check`, build, deploy to GitHub Pages.
   Vite `base` is `/apkg-explorer/`.
 

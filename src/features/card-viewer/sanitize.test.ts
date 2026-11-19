@@ -170,26 +170,32 @@ describe('frame documents', () => {
     expect(mergeReports([report, report])).toEqual(report)
   })
 
-  it('uses app blob URLs in a script-free, same-origin frame', () => {
+  it('builds an opaque-origin frame whose loader is sent the card and its media', () => {
     const frame = buildFrame(content, options, handle)
-    expect(frame.sandbox).toContain('allow-same-origin')
-    expect(frame.sandbox).not.toContain('allow-scripts')
-    expect(frame.payload).toBeNull()
-    expect(frame.srcdoc).toContain("script-src 'none'")
-    expect(frame.srcdoc).toContain('<body class="card card1 nightMode night_mode"><div id="qa"><img src="blob:app/flag.png">')
-    // Deck CSS can't close its <style> element and inject markup.
-    expect(frame.srcdoc).toContain('<\\/style><script>alert(1)')
-    expect(frame.srcdoc).not.toContain('</style><script>')
-  })
-
-  it('hands media to the loader of a frame that runs scripts', () => {
-    const frame = buildFrame(content, { ...options, allowScripts: true }, handle)
     expect(frame.sandbox).toContain('allow-scripts')
     expect(frame.sandbox).not.toContain('allow-same-origin')
-    expect(frame.srcdoc).toContain(`const token = '${frame.token}'`)
-    expect(frame.payload?.media).toEqual([media.get('flag.png'), media.get('b.mp3'), media.get('_bg.png')])
-    expect(frame.payload?.html).toContain(`<img src="apkg-media-${frame.token}-0">`)
-    expect(frame.payload?.html).toContain(`url("apkg-media-${frame.token}-2")`)
-    expect(frame.payload?.html).toContain("script-src 'unsafe-inline' blob:")
+    expect(frame.srcdoc).toContain(`<script nonce="${frame.token}">(() => {\n  const token = '${frame.token}'`)
+    expect(frame.payload.media).toEqual([media.get('flag.png'), media.get('b.mp3'), media.get('_bg.png')])
+    expect(frame.payload.html).toContain(
+      `<body class="card card1 nightMode night_mode"><div id="qa"><img src="apkg-media-${frame.token}-0">`,
+    )
+    expect(frame.payload.html).toContain(`url("apkg-media-${frame.token}-2")`)
+    // Deck CSS can't close its <style> element and inject markup.
+    expect(frame.payload.html).toContain('<\\/style><script>alert(1)')
+    expect(frame.payload.html).not.toContain('</style><script>')
+  })
+
+  it('lets only the loader run while scripts are blocked, and the card scripts once allowed', () => {
+    const blocked = buildFrame(content, options, handle)
+    expect(blocked.srcdoc).toContain(`script-src 'nonce-${blocked.token}';`)
+    expect(blocked.srcdoc).not.toContain("script-src 'unsafe-inline'")
+    expect(blocked.payload.html).toContain("script-src 'none';")
+
+    const allowed = buildFrame(content, { ...options, allowScripts: true }, handle)
+    for (const html of [allowed.srcdoc, allowed.payload.html]) {
+      expect(html).toContain("script-src 'unsafe-inline' blob:;")
+      // A nonce would make browsers ignore 'unsafe-inline' and block the card's scripts.
+      expect(html).not.toContain("'nonce-")
+    }
   })
 })

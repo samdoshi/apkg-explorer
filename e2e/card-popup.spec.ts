@@ -33,6 +33,8 @@ test('a note opens with its cards, steps through the table order and closes with
   await expect(dialog.getByLabel('Card details')).toContainText('DeckSample::GeographyStateReview')
   await saveScreen(dialog, 'card-popup')
 
+  // Keys pressed inside a card reach the popup too.
+  await back.getByText('Berlin').click()
   await page.keyboard.press(']')
   await expect(dialog.getByRole('heading', { name: 'Ireland' })).toBeVisible()
   await dialog.getByRole('button', { name: 'Previous note' }).click()

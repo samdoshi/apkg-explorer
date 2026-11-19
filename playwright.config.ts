@@ -12,9 +12,7 @@ export default defineConfig({
   fullyParallel: true,
   use: {
     baseURL,
-    // No DOM snapshots: taking them runs code in the script-free card frames, which
-    // Chromium reports as console errors (and the guard in e2e/fixtures.ts fails on those).
-    trace: { mode: 'retain-on-failure', snapshots: false },
+    trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
   projects: [
