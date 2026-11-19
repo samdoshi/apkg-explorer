@@ -64,7 +64,16 @@ test('scripts and web content stay blocked, with a notice, until allowed', async
   await expect(quiz.getByText('Options shuffled by a script.')).toHaveCount(0)
   await saveScreen(dialog, 'card-scripts-blocked')
 
-  await dialog.getByRole('button', { name: 'Allow scripts' }).click()
+  // "View scripts" shows the inline code and the package script file's code, read on demand.
+  await dialog.getByRole('button', { name: 'View scripts' }).click()
+  const scripts = page.getByRole('dialog', { name: 'Scripts in this card' })
+  await expect(scripts.getByRole('listitem')).toHaveText([
+    /^Script file _shuffle\.jsFound in: Front.*function shuffle\(list\)/s,
+    /^ScriptFound in: Front.*shuffle\(document\.getElementById\('options'\)\);$/s,
+  ])
+  await saveScreen(scripts, 'card-scripts-view')
+  await scripts.getByRole('button', { name: 'Allow scripts' }).click()
+  await expect(scripts).toHaveCount(0)
   await expect(dialog.getByText('This card has scripts (allowed for this file).')).toBeVisible()
   await expect(quiz.getByText('Options shuffled by a script.')).toBeVisible()
   await page.keyboard.press('Escape')
@@ -76,6 +85,14 @@ test('scripts and web content stay blocked, with a notice, until allowed', async
   const back = page.getByTitle('Back of Card 1').contentFrame()
   await expect(dialog.getByText('This card loads content from example.com (blocked).')).toBeVisible()
   await expect(back.getByText('Blocked image from example.com')).toBeVisible()
+  await dialog.getByRole('button', { name: 'View remote URLs' }).click()
+  const web = page.getByRole('dialog', { name: 'Web content in this card' })
+  await expect(web.getByRole('heading', { name: 'example.com' })).toBeVisible()
+  await expect(web.getByRole('listitem')).toHaveText(['ImageFound in: Back' + 'https://example.com/remote-diagram.png'])
+  // Escape closes only the list; the note stays open, with focus back on the button.
+  await page.keyboard.press('Escape')
+  await expect(web).toHaveCount(0)
+  await expect(dialog.getByRole('button', { name: 'View remote URLs' })).toBeFocused()
   await page.keyboard.press(']')
   await expect(back.getByText('Missing image: missing-picture.png')).toBeVisible()
   await expectOnlyApprovedStorage(page)

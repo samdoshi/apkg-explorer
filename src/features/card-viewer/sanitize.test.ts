@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import type { MediaHandle } from '@/features/package/media-cache'
 import { buildFrame, scanContent, type FrameContent } from './card-document'
-import { ContentCleaner, type CleanOptions } from './sanitize'
+import { ContentCleaner, mergeReports, webHosts, type CleanOptions } from './sanitize'
 import { classifyUrl, rewriteCssUrls } from './urls'
 
 const media = new Map<string, Blob>([
@@ -26,7 +26,7 @@ function clean(html: string, options: Partial<CleanOptions> = {}) {
     canPlay: (name) => !name.endsWith('.ogg'),
     ...options,
   })
-  return { html: cleaner.html(html), report: cleaner.report() }
+  return { html: cleaner.html(html, 'Front'), report: cleaner.report() }
 }
 
 describe('classifyUrl', () => {
@@ -59,9 +59,31 @@ describe('ContentCleaner', () => {
 
   it('removes scripts unless they are allowed', () => {
     const blocked = clean(scripted)
-    expect(blocked.report.scripts).toBe(true)
     expect(blocked.html).toBe('<b>b</b><a>j</a>')
     expect(clean(scripted, { allowScripts: true }).html).toBe(scripted)
+  })
+
+  it('lists each script with its code and where it was found', () => {
+    const cleaner = new ContentCleaner()
+    cleaner.html(`${scripted}<script src="_lib.js"></script><script src="https://cdn.example.org/x.js"></script>`, 'Front')
+    // The back repeats the front ({{FrontSide}}) and adds a script of its own.
+    cleaner.html(`${scripted}<script type="module">\n  run()\n</script>`, 'Back')
+    // A data block never runs, so it isn't a script.
+    cleaner.html('<script type="text/template"><b>x</b></script>', 'Back')
+    const report = cleaner.report()
+    expect(report.scripts).toEqual([
+      { type: 'code', label: 'Script', code: 'alert(1)', where: ['Front', 'Back'] },
+      { type: 'code', label: 'onclick on <b>', code: 'go()', where: ['Front', 'Back'] },
+      { type: 'code', label: 'javascript: link', code: 'javascript:go()', where: ['Front', 'Back'] },
+      { type: 'file', name: '_lib.js', where: ['Front'] },
+      { type: 'web', url: 'https://cdn.example.org/x.js', host: 'cdn.example.org', where: ['Front'] },
+      { type: 'code', label: 'Script', code: 'run()', where: ['Back'] },
+    ])
+    // A web script is web content too.
+    expect(report.web).toEqual([
+      { url: 'https://cdn.example.org/x.js', host: 'cdn.example.org', kind: 'Script', where: ['Front'] },
+    ])
+    expect(report.media).toEqual(['_lib.js'])
   })
 
   it('replaces web content with placeholders unless it is allowed, but keeps links', () => {
@@ -70,7 +92,13 @@ describe('ContentCleaner', () => {
       '<style>@import url("https://fonts.googleapis.com/x"); .a { background: url(//cdn.example.org/b.png) }</style>' +
       '<a href="https://ankiweb.net/">site</a><svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0"></path></svg>'
     const blocked = clean(html)
-    expect(blocked.report.webHosts).toEqual(['cdn.example.org', 'example.com', 'fonts.googleapis.com'])
+    expect(blocked.report.web).toEqual([
+      { url: 'https://example.com/a.png', host: 'example.com', kind: 'Image', where: ['Front'] },
+      { url: 'https://fonts.googleapis.com/css', host: 'fonts.googleapis.com', kind: 'Stylesheet', where: ['Front'] },
+      { url: 'https://fonts.googleapis.com/x', host: 'fonts.googleapis.com', kind: 'Stylesheet (CSS @import)', where: ['Front'] },
+      { url: '//cdn.example.org/b.png', host: 'cdn.example.org', kind: 'Font or image (CSS url)', where: ['Front'] },
+    ])
+    expect(webHosts(blocked.report)).toEqual(['cdn.example.org', 'example.com', 'fonts.googleapis.com'])
     expect(blocked.html).toBe(
       '<span class="apkg-placeholder apkg-blocked" title="https://example.com/a.png">Blocked image from example.com</span>' +
         '<style> .a { background: none }</style>' +
@@ -106,7 +134,11 @@ describe('ContentCleaner', () => {
         '<iframe src="https://www.youtube.com/embed/x"></iframe><form action="https://example.com"><button formaction="/x">Go</button></form>' +
         '<noscript><img src="https://tracker.example/p.png"></noscript>',
     )
-    expect(report.webHosts).toEqual(['plugins.example', 'tracker.example', 'www.youtube.com'])
+    expect(report.web.map((finding) => [finding.host, finding.kind])).toEqual([
+      ['plugins.example', 'Plugin'],
+      ['www.youtube.com', 'Embedded page'],
+      ['tracker.example', 'Image'],
+    ])
     expect(html).toBe(
       '<span class="apkg-placeholder apkg-blocked" title="https://www.youtube.com/embed/x">Blocked embedded page from www.youtube.com</span>' +
         '<form><button>Go</button></form>' +
@@ -118,7 +150,7 @@ describe('ContentCleaner', () => {
 
 describe('frame documents', () => {
   const content: FrameContent = {
-    parts: ['<img src="flag.png"> [sound] <audio controls src="b.mp3"></audio>'],
+    parts: [{ label: 'Front', html: '<img src="flag.png"> [sound] <audio controls src="b.mp3"></audio>' }],
     layout: ([part = '']) => `<div id="qa">${part}</div>`,
     css: '.card { background: url(_bg.png) } </style><script>alert(1)</script>',
     bodyClass: 'card card1',
@@ -126,7 +158,16 @@ describe('frame documents', () => {
   const options = { allowScripts: false, allowWeb: false, nightMode: true, canPlay: () => true }
 
   it('reports what the content needs before media is loaded', () => {
-    expect(scanContent([content])).toEqual({ scripts: false, webHosts: [], media: ['flag.png', 'b.mp3', '_bg.png'] })
+    expect(scanContent([content])).toEqual({ scripts: [], web: [], media: ['flag.png', 'b.mp3', '_bg.png'] })
+  })
+
+  it('merges findings from several frames, keeping every place they were found', () => {
+    const side = (label: string, html: string): FrameContent => ({ ...content, parts: [{ label, html }], css: '' })
+    const image = '<img src="https://example.com/a.png">'
+    const report = scanContent([side('Front', image), side('Back', `${image}<b onclick="x()">b</b>`)])
+    expect(report.web).toEqual([{ url: 'https://example.com/a.png', host: 'example.com', kind: 'Image', where: ['Front', 'Back'] }])
+    expect(report.scripts).toEqual([{ type: 'code', label: 'onclick on <b>', code: 'x()', where: ['Back'] }])
+    expect(mergeReports([report, report])).toEqual(report)
   })
 
   it('uses app blob URLs in a script-free, same-origin frame', () => {

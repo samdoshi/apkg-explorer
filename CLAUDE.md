@@ -37,7 +37,8 @@ src/features/<name>/    code grouped by feature:
   card-viewer/          #/notes/:noteTypeId/:noteId: the note popup, a child route of the table so
                         Back closes it. template.ts + cloze.ts + template-filters.ts = Anki's
                         template language; card-html.ts = reviewer extras (type answers, [sound:]);
-                        sanitize.ts + urls.ts = cleaning and script/web detection; card-document.ts =
+                        sanitize.ts + urls.ts = cleaning and script/web findings (listed by
+                        content-details.tsx, "View scripts" / "View remote URLs"); card-document.ts =
                         frame documents (CSP, sandbox, the loader used when scripts are allowed).
                         Media blobs come from package/media-cache.ts (64 MB LRU, on the client)
   (to come: mathjax, media)

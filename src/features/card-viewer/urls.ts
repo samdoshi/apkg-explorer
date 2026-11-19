@@ -59,15 +59,18 @@ function cssString(value: string): string {
  * use, or null to drop it: a dropped @import is removed, a dropped url() becomes `none`
  * (which makes most declarations that held it invalid, so the browser ignores them).
  */
-export function rewriteCssUrls(css: string, resolve: (url: string) => string | null): string {
+export function rewriteCssUrls(
+  css: string,
+  resolve: (url: string, kind: 'url' | 'import') => string | null,
+): string {
   return css.replace(
     CSS_REFERENCE,
     (_match, importUrl?: string, importString?: string, media?: string, url?: string) => {
       if (url !== undefined) {
-        const next = resolve(unquote(url))
+        const next = resolve(unquote(url), 'url')
         return next === null ? 'none' : `url(${cssString(next)})`
       }
-      const next = resolve(unquote(importUrl ?? importString ?? ''))
+      const next = resolve(unquote(importUrl ?? importString ?? ''), 'import')
       return next === null ? '' : `@import url(${cssString(next)})${media ?? ''};`
     },
   )

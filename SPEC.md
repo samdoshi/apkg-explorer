@@ -123,6 +123,16 @@ Cards render in a sandboxed `<iframe>` with its own Content-Security-Policy.
 - **When detected**, a notice above the card says what was blocked, e.g. "This card has scripts
   (blocked) — Allow scripts" and "This card loads content from fonts.googleapis.com,
   example.com (blocked) — Allow web content". The two permissions are separate.
+- _Added after step 3: each notice also has a **View scripts** / **View remote URLs** button
+  that lists what was found in this card (or note), so the choice is an informed one. Scripts
+  show their code: each `<script>`, inline handler (e.g. `onclick on <button>`) and
+  `javascript:` link, plus script files from the package, read from the file on demand (the
+  first 256 KB). Web scripts show only their address; nothing is downloaded. Web addresses are
+  grouped by site, with what would load each one (image, stylesheet, CSS `url()`, script,
+  embedded page…). Every item says where it was found: front, back, card styling or a named
+  field. Addresses are plain text, not links. The list explains what allowing means (for the
+  whole file) and has its own Allow / Block button. Data blocks such as
+  `<script type="text/template">` never run, so they aren't counted as scripts and are kept._
 - A permission applies to the whole open file until the user turns it off, opens another file
   or reloads. It is never saved.
 - Allowed scripts still run in a sandbox with an opaque origin: they cannot reach the app, the

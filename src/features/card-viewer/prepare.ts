@@ -45,7 +45,7 @@ export function prepareCards(noteType: NoteTypeInfo, note: NoteDetail): CardView
       ? renderCard({ front: template.front, back: template.back, fields, ord: card.ord, isCloze })
       : { question: missingTemplate, answer: missingTemplate }
     const side = (html: string, question: boolean): FrameContent => ({
-      parts: [finishSide(html, { question, fields, cardNumber: number })],
+      parts: [{ label: question ? 'Front' : 'Back', html: finishSide(html, { question, fields, cardNumber: number }) }],
       layout: inQa,
       css: noteType.css,
       bodyClass: `card card${String(number)}`,
@@ -65,7 +65,7 @@ export function prepareNote(noteType: NoteTypeInfo, note: NoteDetail): FrameCont
   const count = Math.max(noteType.fields.length, note.fields.length)
   const names = Array.from({ length: count }, (_, index) => noteType.fields[index]?.name ?? `Field ${String(index + 1)}`)
   return {
-    parts: names.map((_, index) => finishField(note.fields[index] ?? '')),
+    parts: names.map((name, index) => ({ label: name, html: finishField(note.fields[index] ?? '') })),
     layout: (parts) =>
       `<dl class="apkg-fields">${parts
         .map((part, index) => {

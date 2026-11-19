@@ -63,6 +63,9 @@ export function NoteDialog() {
   }
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.altKey || event.ctrlKey || event.metaKey || (event.key !== '[' && event.key !== ']')) return
+    // Keys in a dialog opened from this one (e.g. "View scripts") bubble here through
+    // React's tree; they aren't for us.
+    if (!(event.target instanceof Node) || !event.currentTarget.contains(event.target)) return
     event.preventDefault()
     handleKey(event.key)
   }

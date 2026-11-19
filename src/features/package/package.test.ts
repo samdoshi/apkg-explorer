@@ -56,7 +56,7 @@ describe('current format (collection.anki21b)', () => {
 
   it('lists media and decompresses files on demand', async () => {
     const pkg = await open('sample.apkg')
-    expect(pkg.summary().mediaCount).toBe(15)
+    expect(pkg.summary().mediaCount).toBe(16)
     const flag = pkg.mediaFiles().find((m) => m.name === 'flag-japan.png')
     expect(flag?.size).toBeGreaterThan(100)
 

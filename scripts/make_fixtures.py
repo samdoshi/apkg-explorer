@@ -140,16 +140,12 @@ def country(nt_id: int) -> NoteType:
 
 
 def quiz(nt_id: int) -> NoteType:
-    # A template that relies on JavaScript, to exercise the "scripts blocked" notice.
+    # A template that relies on JavaScript, to exercise the "scripts blocked" notice and the
+    # script list: a script file from the package (_shuffle.js) and an inline script using it.
     script = (
+        '<script src="_shuffle.js"></script>\n'
         "<script>\n"
-        "  var list = document.getElementById('options');\n"
-        "  for (var i = list.children.length; i >= 0; i--) {\n"
-        "    list.appendChild(list.children[Math.random() * i | 0]);\n"
-        "  }\n"
-        "  var done = document.createElement('p');\n"
-        "  done.textContent = 'Options shuffled by a script.';\n"
-        "  list.after(done);\n"
+        "  shuffle(document.getElementById('options'));\n"
         "</script>"
     )
     return NoteType(
@@ -556,6 +552,17 @@ WATER_SVG = b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 140" wi
 </svg>
 """
 
+SHUFFLE_JS = b"""// Shuffles a list's items, then says so underneath.
+function shuffle(list) {
+  for (var i = list.children.length; i >= 0; i--) {
+    list.appendChild(list.children[Math.random() * i | 0]);
+  }
+  var done = document.createElement('p');
+  done.textContent = 'Options shuffled by a script.';
+  list.after(done);
+}
+"""
+
 GLOBE_SVG = b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
   <circle cx="24" cy="24" r="21" fill="#2bb0ed" stroke="#0b69a3" stroke-width="2"/>
   <path d="M24 3v42M3 24h42M8 13h32M8 35h32" stroke="#0b69a3" stroke-width="1.5" fill="none"/>
@@ -593,7 +600,8 @@ COUNTRIES = [
 def sample_package() -> Package:
     nt_basic, nt_rev, nt_type = basic(1_700_000_000_001), basic_reversed(1_700_000_000_002), basic_typing(1_700_000_000_003)
     nt_cloze, nt_country, nt_quiz = cloze(1_700_000_000_004), country(1_700_000_000_005), quiz(1_700_000_000_006)
-    media: dict[str, bytes] = {"_globe.svg": GLOBE_SVG, "_waves.svg": WAVES_SVG, "water.svg": WATER_SVG}
+    media: dict[str, bytes] = {"_globe.svg": GLOBE_SVG, "_waves.svg": WAVES_SVG, "water.svg": WATER_SVG,
+                               "_shuffle.js": SHUFFLE_JS}
     notes: list[Note] = []
 
     for i, (name, capital, flag, chime, tags, extra) in enumerate(COUNTRIES):

@@ -18,8 +18,11 @@ import { ContentCleaner, mergeReports, type ContentReport } from './sanitize'
  */
 
 export interface FrameContent {
-  /** Uncleaned HTML pieces (a card side, or each field), cleaned one at a time. */
-  parts: string[]
+  /**
+   * Uncleaned HTML pieces (a card side, or each field), cleaned one at a time. The label
+   * ("Front", a field name…) says where things were found in the "View" lists.
+   */
+  parts: { label: string; html: string }[]
   /** Lays the cleaned parts out as the body's HTML. */
   layout: (parts: string[]) => string
   /** The note type's CSS. */
@@ -43,13 +46,16 @@ export interface FrameDocument {
   payload: { html: string; media: Blob[] } | null
 }
 
+/** Where findings in the note type's CSS are said to be. */
+const CSS_LABEL = 'Card styling'
+
 /** Finds out what content needs (media) and does (scripts, web loads), before loading media. */
 export function scanContent(contents: FrameContent[]): ContentReport {
   return mergeReports(
     contents.map((content) => {
       const cleaner = new ContentCleaner()
-      for (const part of content.parts) cleaner.html(part)
-      cleaner.css(content.css)
+      for (const part of content.parts) cleaner.html(part.html, part.label)
+      cleaner.css(content.css, CSS_LABEL)
       return cleaner.report()
     }),
   )
@@ -162,8 +168,8 @@ export function buildFrame(content: FrameContent, options: FrameOptions, media: 
       }
     : (name: string) => media.url(name)
   const cleaner = new ContentCleaner({ ...options, mediaUrl })
-  const body = content.layout(content.parts.map((part) => cleaner.html(part)))
-  const css = cleaner.css(content.css)
+  const body = content.layout(content.parts.map((part) => cleaner.html(part.html, part.label)))
+  const css = cleaner.css(content.css, CSS_LABEL)
 
   const csp = cardCsp(options)
   const colorScheme = options.nightMode ? 'dark' : 'light'
