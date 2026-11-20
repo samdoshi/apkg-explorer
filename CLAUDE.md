@@ -143,6 +143,7 @@ Guardrails
 - Keep this file up to date when commands, layout, environment or rules change.
 - Commit after each feature passes both checks, then stop so the user can try it.
 - GitHub Pages deploy via `.github/workflows/deploy.yml` (runs `npm run check`, then builds).
+  Its actions are pinned to commit hashes, with the release in a comment; update both together.
   Vite `base` is `/apkg-explorer/`. `check:ui` stays local for now.
 - Later, not now: vite-plugin-pwa for offline use with an "update available" prompt. It caches
   the app's files in the browser, so it needs the user's OK under the Data rules first.
