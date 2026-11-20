@@ -93,8 +93,10 @@ test('the media list filters, sorts and previews files, which download and close
   await expect(samples.first()).toHaveText('EnglishThe quick brown fox jumps over the lazy dog.')
   await expect(samples.nth(1)).toContainText('French · not in this font: ë œ é è')
   await expect(dialog.getByText(/^Not in this font: Greek, Russian, .*, Japanese, Korean\.$/)).toBeVisible()
-  await dialog.getByLabel('Your text').fill('Anki 暗記')
-  await expect(dialog.getByText('Your text · not in this font: 暗 記')).toBeVisible()
+  // Typed key by key (fill() presses no keys): [ and ] in a text box are text, not Previous / Next.
+  await dialog.getByLabel('Your text').pressSequentially('Anki [暗記]')
+  await expect(dialog.getByLabel('Your text')).toHaveValue('Anki [暗記]')
+  await expect(dialog.getByText('Your text · not in this font: [ 暗 記 ]')).toBeVisible()
   await expect(dialog.getByRole('list', { name: 'Private use characters' }).getByRole('listitem')).toHaveText([
     /U\+E000 star$/,
     /U\+E001 heart$/,

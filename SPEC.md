@@ -206,8 +206,8 @@ _As built (step 5):_
   descending, shift-click adds a secondary sort. Size sorts unknown sizes last. On phones the
   Kind column is hidden and each name's icon shows its kind._
 - _The preview is a child route (`#/media/<name>`), like the note popup: Back closes it, `[` and
-  `]` (or the arrow buttons) step through the list's current order, and closing puts focus back
-  on the file's row. Images show on a checkerboard so transparent parts are visible, with their
+  `]` (or the arrow buttons) step through the list's current order (but not while typing in a
+  text box, such as the font preview's), and closing puts focus back on the file's row. Images show on a checkerboard so transparent parts are visible, with their
   pixel size; audio and video use the browser's player, or say the browser can't play that
   type._
 - _Added: text files (`.js`, `.css`, `.json`, `.txt`) show their first 256 KB as plain text, so

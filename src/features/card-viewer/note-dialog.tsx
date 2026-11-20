@@ -1,20 +1,18 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { useCallback, useMemo, useState, type KeyboardEvent } from 'react'
-import { useLocation, useNavigate, useOutletContext, useParams } from 'react-router'
+import { useCallback, useMemo, useState } from 'react'
+import { useOutletContext, useParams } from 'react-router'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Spinner } from '@/components/ui/spinner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ListPopup } from '@/features/app-shell/list-popup'
 import { LoadingStatus, type LoadingState } from '@/features/app-shell/loading-status'
+import { useListPopup } from '@/features/app-shell/use-list-popup'
 import type { NoteTypeInfo } from '@/features/package/collection'
 import type { NoteDetail } from '@/features/package/note-detail'
 import type { PackageClient } from '@/features/package/package-client'
 import { usePackage } from '@/features/package/package-context'
 import { usePackageData } from '@/features/package/use-package-data'
-import { formatDate, formatNumber } from '@/lib/format'
-import { isOpenedFromList, openedFromList } from '@/lib/opened-from-list'
+import { formatDate } from '@/lib/format'
 import { usePrefersDark } from '@/lib/use-prefers-dark'
 import { canPlay } from './can-play'
 import { CardFrame } from './card-frame'
@@ -33,111 +31,44 @@ export function NoteDialog() {
   const { state } = usePackage()
   const { noteId: noteIdParam } = useParams()
   const context = useOutletContext<NoteDialogContext>()
-  const navigate = useNavigate()
-  const location = useLocation()
   // The chosen tab carries over to the next note when that note has it too.
   const [tab, setTab] = useState<string | null>(null)
-  if (state.status !== 'ready') return null
-
   const noteId = Number(noteIdParam)
   const { noteType, orderedIds } = context
   const base = `/notes/${String(noteType.id)}`
-  const index = orderedIds.indexOf(noteId)
-  const previous = index > 0 ? orderedIds[index - 1] : undefined
-  const next = index >= 0 ? orderedIds[index + 1] : undefined
+  const popup = useListPopup({
+    items: orderedIds,
+    current: noteId,
+    noun: 'note',
+    listPath: base,
+    itemPath: (id) => `${base}/${String(id)}`,
+  })
+  if (state.status !== 'ready') return null
+
   const sortField = context.rowFor(noteId)?.fields[noteType.sortFieldIndex] ?? ''
   const title = (noteType.kind === 'cloze' ? stripClozes(sortField) : sortField).trim() || 'Note'
 
-  const fromTable = isOpenedFromList(location.state)
-  const close = () => {
-    // Opened from the table: going back closes it and keeps the history tidy.
-    if (fromTable) void navigate(-1)
-    else void navigate(base, { replace: true })
-  }
-  const go = (id: number | undefined) => {
-    // Replace, so Back still closes the popup however far you've stepped.
-    if (id !== undefined) {
-      void navigate(`${base}/${String(id)}`, { replace: true, state: fromTable ? openedFromList : null })
-    }
-  }
-  const handleKey = (key: string) => {
-    if (key === 'Escape') close()
-    else if (key === '[') go(previous)
-    else if (key === ']') go(next)
-  }
-  const onKeyDown = (event: KeyboardEvent) => {
-    if (event.altKey || event.ctrlKey || event.metaKey || (event.key !== '[' && event.key !== ']')) return
-    // Keys in a dialog opened from this one (e.g. "View scripts") bubble here through
-    // React's tree; they aren't for us.
-    if (!(event.target instanceof Node) || !event.currentTarget.contains(event.target)) return
-    event.preventDefault()
-    handleKey(event.key)
-  }
-
   return (
-    <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open) close()
+    <ListPopup
+      popup={popup}
+      title={title}
+      details={[noteType.name]}
+      className="sm:h-[min(92dvh,60rem)] sm:max-w-[min(80rem,calc(100%-2rem))]"
+      onClosed={() => {
+        context.onClosed(noteId)
       }}
     >
-      <DialogContent
-        className="flex h-dvh max-h-dvh w-full max-w-full flex-col gap-0 rounded-none p-0 sm:h-[min(92dvh,60rem)] sm:max-w-[min(80rem,calc(100%-2rem))] sm:rounded-xl"
-        onKeyDown={onKeyDown}
-        onCloseAutoFocus={(event) => {
-          event.preventDefault()
-          context.onClosed(noteId)
-        }}
-      >
-        <header className="flex items-center gap-2 border-b py-3 pr-14 pl-4">
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <DialogTitle className="truncate text-base" title={title}>
-              {title}
-            </DialogTitle>
-            <DialogDescription className="truncate text-xs">
-              {noteType.name}
-              {index >= 0 && ` · Note ${formatNumber(index + 1)} of ${formatNumber(orderedIds.length)}`}
-            </DialogDescription>
-          </div>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            aria-label="Previous note"
-            aria-keyshortcuts="["
-            title="Previous note ( [ )"
-            disabled={previous === undefined}
-            onClick={() => {
-              go(previous)
-            }}
-          >
-            <ChevronLeft aria-hidden="true" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            aria-label="Next note"
-            aria-keyshortcuts="]"
-            title="Next note ( ] )"
-            disabled={next === undefined}
-            onClick={() => {
-              go(next)
-            }}
-          >
-            <ChevronRight aria-hidden="true" />
-          </Button>
-        </header>
-        <NoteBody
-          key={noteId}
-          client={state.client}
-          collectionCreated={state.summary.collectionCreated}
-          noteId={noteId}
-          noteTypeId={noteType.id}
-          tab={tab}
-          onTabChange={setTab}
-          onKey={handleKey}
-        />
-      </DialogContent>
-    </Dialog>
+      <NoteBody
+        key={noteId}
+        client={state.client}
+        collectionCreated={state.summary.collectionCreated}
+        noteId={noteId}
+        noteTypeId={noteType.id}
+        tab={tab}
+        onTabChange={setTab}
+        onKey={popup.handleKey}
+      />
+    </ListPopup>
   )
 }
 

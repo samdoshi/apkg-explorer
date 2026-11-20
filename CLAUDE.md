@@ -32,7 +32,9 @@ src/lib/                shared helpers: format.ts (numbers, sizes, dates, name o
 src/features/<name>/    code grouped by feature:
   app-shell/            layout, header, drop overlay, RequirePackage route guard,
                         route-error.tsx (errorElements: a page or popup that fails while drawing),
-                        loading-status.tsx (spinner / failure message while data loads)
+                        loading-status.tsx (spinner / failure message while data loads),
+                        list-popup.tsx + use-list-popup.ts (the note popup's and media preview's
+                        shared dialog: title, Previous / Next, [ ] keys, closing with Back)
   open-file/            start screen, file picker, window-wide drag and drop, sample deck
   package/              .apkg reader (zip, zstd, protobuf, media map, schema 11/18), the Web
                         Worker that runs it, PackageClient (main-thread RPC) and React context;

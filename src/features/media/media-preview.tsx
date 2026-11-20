@@ -1,16 +1,16 @@
-import { ChevronLeft, ChevronRight, Download } from 'lucide-react'
-import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { useLocation, useNavigate, useOutletContext, useParams } from 'react-router'
+import { Download } from 'lucide-react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { useOutletContext, useParams } from 'react-router'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Spinner } from '@/components/ui/spinner'
+import { ListPopup } from '@/features/app-shell/list-popup'
+import { useListPopup } from '@/features/app-shell/use-list-popup'
 import { canPlay } from '@/features/card-viewer/can-play'
 import { mimeTypeFor } from '@/features/package/mime'
 import type { PackageClient } from '@/features/package/package-client'
 import { usePackage } from '@/features/package/package-context'
-import { formatBytes, formatNumber } from '@/lib/format'
-import { isOpenedFromList, openedFromList } from '@/lib/opened-from-list'
+import { formatBytes } from '@/lib/format'
 import { FontView } from './font-view'
 import { kindInfo } from './kinds'
 import type { MediaPreviewContext } from './media-preview-context'
@@ -22,95 +22,37 @@ export function MediaPreview() {
   const { state } = usePackage()
   const { name = '' } = useParams()
   const context = useOutletContext<MediaPreviewContext>()
-  const navigate = useNavigate()
-  const location = useLocation()
+  const popup = useListPopup({
+    items: context.orderedNames,
+    current: name,
+    noun: 'file',
+    listPath: '/media',
+    itemPath: mediaPath,
+  })
   if (state.status !== 'ready') return null
 
-  const { orderedNames } = context
-  const index = orderedNames.indexOf(name)
-  const previous = index > 0 ? orderedNames[index - 1] : undefined
-  const next = index >= 0 ? orderedNames[index + 1] : undefined
   const file = context.rowFor(name)
-
-  const fromList = isOpenedFromList(location.state)
-  const close = () => {
-    // Opened from the list: going back closes it and keeps the history tidy.
-    if (fromList) void navigate(-1)
-    else void navigate('/media', { replace: true })
-  }
-  const go = (target: string | undefined) => {
-    // Replace, so Back still closes the preview however far you've stepped.
-    if (target !== undefined) void navigate(mediaPath(target), { replace: true, state: fromList ? openedFromList : null })
-  }
-  const onKeyDown = (event: KeyboardEvent) => {
-    if (event.altKey || event.ctrlKey || event.metaKey) return
-    if (event.key !== '[' && event.key !== ']') return
-    event.preventDefault()
-    go(event.key === '[' ? previous : next)
-  }
-
-  const details = file && [kindInfo[file.kind].label, extensionLabel(file.name), file.size === null ? null : formatBytes(file.size)]
-  const position =
-    index >= 0 ? `File ${formatNumber(index + 1)} of ${formatNumber(orderedNames.length)}` : null
+  const details = file ? [kindInfo[file.kind].label, extensionLabel(file.name), file.size === null ? null : formatBytes(file.size)] : []
 
   return (
-    <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open) close()
+    // A fixed height from sm up, so Previous and Next stay put. Long names wrap (the list
+    // truncates them).
+    <ListPopup
+      popup={popup}
+      title={name}
+      wrapTitle
+      details={details}
+      className="sm:h-[min(88dvh,44rem)] sm:max-w-[min(56rem,calc(100%-2rem))]"
+      onClosed={() => {
+        context.onClosed(name)
       }}
     >
-      {/* Full screen on phones; a fixed height from sm up, so Previous and Next stay put. */}
-      <DialogContent
-        className="flex h-dvh max-h-dvh w-full max-w-full flex-col gap-0 rounded-none p-0 sm:h-[min(88dvh,44rem)] sm:max-w-[min(56rem,calc(100%-2rem))] sm:rounded-xl"
-        onKeyDown={onKeyDown}
-        onCloseAutoFocus={(event) => {
-          event.preventDefault()
-          context.onClosed(name)
-        }}
-      >
-        {/* Long names wrap (the list truncates them); the buttons stay at the top. */}
-        <header className="flex items-start gap-2 border-b py-3 pr-14 pl-4">
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <DialogTitle className="text-base wrap-anywhere">{name}</DialogTitle>
-            <DialogDescription className="text-xs">
-              {[...(details ?? []), position].filter(Boolean).join(' · ')}
-            </DialogDescription>
-          </div>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            aria-label="Previous file"
-            aria-keyshortcuts="["
-            title="Previous file ( [ )"
-            disabled={previous === undefined}
-            onClick={() => {
-              go(previous)
-            }}
-          >
-            <ChevronLeft aria-hidden="true" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            aria-label="Next file"
-            aria-keyshortcuts="]"
-            title="Next file ( ] )"
-            disabled={next === undefined}
-            onClick={() => {
-              go(next)
-            }}
-          >
-            <ChevronRight aria-hidden="true" />
-          </Button>
-        </header>
-        {file ? (
-          <PreviewBody key={name} client={state.client} file={file} />
-        ) : (
-          <Message>This file isn’t in the open package’s media list.</Message>
-        )}
-      </DialogContent>
-    </Dialog>
+      {file ? (
+        <PreviewBody key={name} client={state.client} file={file} />
+      ) : (
+        <Message>This file isn’t in the open package’s media list.</Message>
+      )}
+    </ListPopup>
   )
 }
 
