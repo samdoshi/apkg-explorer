@@ -251,6 +251,8 @@ _As built (step 5):_
 
 - **Stack**: Vite + React + TypeScript (strict), React Router hash router with every route in
   `src/routes.tsx`, Tailwind CSS v4 + shadcn/ui, TanStack Table v8 + TanStack Virtual.
+  _The pages that need an open file are loaded separately from the start screen (about 134 KB
+  gzipped to show it, down from 211 KB) and fetched in the background once it's up._
 - **Package reading**: `@zip.js/zip.js` (random-access zip from a `File`), `sql.js` (SQLite
   compiled to WASM, bundled by Vite), `fzstd` (zstd decompression, pure JS).
 - **Folders**:

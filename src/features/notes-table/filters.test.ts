@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NoteRow } from '@/features/package/note-row'
 import { normalizeForSearch } from '@/lib/search'
-import { describeFilter, filterRows, isFilterActive, type ColumnFilters } from './filters'
+import { describeFilter, fieldColumnId, filterRows, isFilterActive, type ColumnFilters } from './filters'
 
 function note(id: number, fields: string[], extra: Partial<NoteRow> = {}): NoteRow {
   const row: NoteRow = {
@@ -45,6 +45,19 @@ describe('filterRows', () => {
     expect(ids(filterRows(rows, '', { 'field:1': { kind: 'text', op: 'contains', value: 'map' } }))).toEqual([4])
     expect(ids(filterRows(rows, '', { 'field:1': { kind: 'text', op: 'empty' } }))).toEqual([5])
     expect(ids(filterRows(rows, '', { 'field:1': { kind: 'text', op: 'not-empty' } }))).toEqual([1, 2, 3, 4])
+  })
+
+  it('text filters ignore accents, and give the same answers each time (fields are normalised once)', () => {
+    const contains = (index: number, value: string) => {
+      const filters: ColumnFilters = {}
+      filters[fieldColumnId(index)] = { kind: 'text', op: 'contains', value }
+      return ids(filterRows(rows, '', filters))
+    }
+    expect(contains(0, 'OSTER')).toEqual([3])
+    expect(contains(0, 'oster')).toEqual([3])
+    // Each field of a row is normalised separately.
+    expect(contains(1, 'wien')).toEqual([3])
+    expect(contains(0, 'wien')).toEqual([])
   })
 
   it('tag filters match any, all, or untagged', () => {

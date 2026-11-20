@@ -20,7 +20,9 @@ Saved-data approvals live in AGENTS.md:
 ## Folder layout
 
 ```
-src/routes.tsx          every route (hash router)
+src/routes.tsx          every route (hash router). Pages that need an open file are lazy (their
+                        own chunks); prefetchPages() (called from main.tsx on load) fetches them
+                        in the background, so the start screen comes up first
 src/main.tsx            entry
 src/index.css           Tailwind + shadcn theme (dark mode = prefers-color-scheme)
 src/components/ui/      shadcn components (generated; add with the CLI, below)
@@ -126,8 +128,8 @@ Checks
 - Save screenshots of key screens at 1280x800 to `test-results/screens/`. After a visual change,
   open only the screenshots that `check:ui` reports as new or changed, preferring element
   screenshots to full-page ones. The report compares file hashes, so Chromium's rendering noise
-  (1-2 colour levels on anti-aliased edges, seen on `media-font.png` and `card-maths.png`) can
-  mark an untouched screen as changed.
+  (1-2 colour levels on anti-aliased edges, seen on `media-font.png`, `card-maths.png` and
+  `filter-tags.png`) can mark an untouched screen as changed.
 
 Guardrails
 - npm with exact versions (`save-exact=true` in `.npmrc`). Ask before adding any dependency

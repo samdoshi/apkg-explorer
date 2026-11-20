@@ -64,6 +64,19 @@ export function fieldValue(row: NoteRow, index: number): string {
   return (row.media[index] ?? []).map((ref) => ref.name).join(' ')
 }
 
+/** Each row's fields normalised for search, worked out once per field when first filtered on. */
+const searchableFields = new WeakMap<NoteRow, string[]>()
+
+function searchableField(row: NoteRow, index: number): string {
+  let fields = searchableFields.get(row)
+  if (!fields) {
+    fields = []
+    searchableFields.set(row, fields)
+  }
+  // Normalising non-Latin text is slow enough to notice when it's redone on every keypress.
+  return (fields[index] ??= normalizeForSearch(fieldValue(row, index)))
+}
+
 function startOfDay(date: string): number {
   return new Date(`${date}T00:00:00`).getTime()
 }
@@ -77,7 +90,7 @@ function compile(columnId: ColumnId, filter: ColumnFilter): (row: NoteRow) => bo
       if (filter.op === 'not-empty') return (row) => fieldValue(row, index) !== ''
       const words = searchWords(filter.value)
       return (row) => {
-        const text = normalizeForSearch(fieldValue(row, index))
+        const text = searchableField(row, index)
         return words.every((word) => text.includes(word))
       }
     }
