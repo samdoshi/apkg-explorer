@@ -62,6 +62,10 @@ messages we need are decoded by a small hand-written decoder (no protobuf librar
   - Fields: "contains" text, plus "is empty" / "is not empty".
   - Tags: pick tags from a searchable checklist; match any or all; "untagged".
   - Deck: pick decks from a searchable checklist.
+    _A deck includes its subdecks, as in Anki's search, and the checklist also lists the decks
+    above the notes' own (e.g. `Sample` for `Sample::Geography`). The deck filter is kept in the
+    address (`#/notes/<id>?deck=…`), so the Overview can link to it, the note popup keeps it, and
+    it stays when switching note type; the other filters belong to one note type's table._
   - Cards: min/max number.
   - Created / Modified: from/to date.
   - Active filters appear as removable chips above the table, with "Clear all".
@@ -244,6 +248,11 @@ _As built (step 5):_
   _Overview (`#/overview`) keeps the package summary from step 1: format, counts, note types
   with their fields and card types, and decks. Filtered decks are marked as such; a card in
   one counts towards it and towards its home deck._
+  _Added: each note type (with notes) links to its table. Decks are a tree built from their
+  `::` names, with the decks above added; a deck's count includes its subdecks. Each deck
+  links to the notes table at the note type it has the most notes of (subdecks included),
+  filtered to that deck. Filtered decks don't link: their notes are listed under their home
+  decks._
 - _A page or popup that fails while it draws (cards are built from the deck's own templates
   and HTML as they're shown) is replaced by a short message saying what went wrong, with the
   header still there; a failed popup closes like the popups do. A package whose note type or

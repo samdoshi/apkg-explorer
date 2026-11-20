@@ -6,7 +6,7 @@ import {
 } from '@tanstack/react-table'
 import { Search, X } from 'lucide-react'
 import { useCallback, useDeferredValue, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Navigate, Outlet, useNavigate, useParams } from 'react-router'
+import { Navigate, Outlet, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -41,12 +41,13 @@ import { NotesTable, type NotesTableHandle } from './notes-table'
 /** #/notes: go to the note type with the most notes. */
 export function NotesIndex() {
   const { state } = usePackage()
+  const { search } = useLocation()
   if (state.status !== 'ready') return null
   const noteType = defaultNoteType(state.summary)
   if (!noteType) {
     return <p className="p-8 text-center text-muted-foreground">This package has no note types.</p>
   }
-  return <Navigate to={`/notes/${String(noteType.id)}`} replace />
+  return <Navigate to={{ pathname: `/notes/${String(noteType.id)}`, search }} replace />
 }
 
 /** #/notes/:noteTypeId */
@@ -104,9 +105,17 @@ function NotesBrowser({
   const [query, setQuery] = useState('')
   const [filters, setFilters] = useState<ColumnFilters>({})
   const [sorting, setSorting] = useState<SortingState>([])
+  // The deck filter is in the address (?deck=…, once per deck), so a link can set it (the
+  // Overview's decks) and it stays when you switch note type. The rest is this table's own.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { search } = useLocation()
+  const allFilters = useMemo((): ColumnFilters => {
+    const decks = searchParams.getAll('deck')
+    return decks.length > 0 ? { ...filters, decks: { kind: 'decks', decks } } : filters
+  }, [filters, searchParams])
   // Typing stays responsive on big decks: filtering runs at a lower priority.
   const deferredQuery = useDeferredValue(query)
-  const deferredFilters = useDeferredValue(filters)
+  const deferredFilters = useDeferredValue(allFilters)
   const visibleRows = useMemo(
     () => filterRows(rows, deferredQuery, deferredFilters),
     [rows, deferredQuery, deferredFilters],
@@ -128,15 +137,29 @@ function NotesBrowser({
     sortDescFirst: false,
   })
 
+  const setDecks = (decks: string[]) => {
+    // Replaced, like the other filters, which don't add history entries either.
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous)
+        next.delete('deck')
+        for (const deck of decks) next.append('deck', deck)
+        return next
+      },
+      { replace: true },
+    )
+  }
   const setFilter = (columnId: ColumnId, filter: ColumnFilter | null) => {
-    setFilters((previous) => ({ ...previous, [columnId]: filter ?? undefined }))
+    if (columnId === 'decks') setDecks(filter?.kind === 'decks' ? filter.decks : [])
+    else setFilters((previous) => ({ ...previous, [columnId]: filter ?? undefined }))
   }
   const clearAll = () => {
     setFilters({})
+    setDecks([])
     setQuery('')
   }
 
-  const active = Object.entries(filters).flatMap(([columnId, filter]) =>
+  const active = Object.entries(allFilters).flatMap(([columnId, filter]) =>
     filter && isFilterActive(filter)
       ? [{ columnId: columnId as ColumnId, label: describeFilter(info.get(columnId)?.label ?? columnId, filter) }]
       : [],
@@ -153,7 +176,7 @@ function NotesBrowser({
     onClosed: (noteId) => tableRef.current?.focusNote(noteId),
   }
   const openNote = (noteId: number) => {
-    void navigate(`/notes/${String(noteType.id)}/${String(noteId)}`, { state: openedFromList })
+    void navigate({ pathname: `/notes/${String(noteType.id)}/${String(noteId)}`, search }, { state: openedFromList })
   }
 
   return (
@@ -211,7 +234,7 @@ function NotesBrowser({
         ref={tableRef}
         table={table}
         info={info}
-        filters={filters}
+        filters={allFilters}
         facets={facets}
         totalCount={rows.length}
         noteTypeName={noteType.name}
@@ -234,6 +257,8 @@ function Toolbar({
   children?: ReactNode
 }) {
   const navigate = useNavigate()
+  // Keeps the deck filter (see NotesBrowser).
+  const { search } = useLocation()
   const choices = browsableNoteTypes(summary)
   return (
     <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
@@ -243,7 +268,7 @@ function Toolbar({
           <Select
             value={String(noteType.id)}
             onValueChange={(id) => {
-              void navigate(`/notes/${id}`)
+              void navigate({ pathname: `/notes/${id}`, search })
             }}
           >
             <SelectTrigger aria-label="Note type" className="w-full sm:w-72">

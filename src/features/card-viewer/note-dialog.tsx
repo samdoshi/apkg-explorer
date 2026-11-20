@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { useOutletContext, useParams } from 'react-router'
+import { useLocation, useOutletContext, useParams } from 'react-router'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
@@ -35,13 +35,15 @@ export function NoteDialog() {
   const [tab, setTab] = useState<string | null>(null)
   const noteId = Number(noteIdParam)
   const { noteType, orderedIds } = context
+  // The table's deck filter is in the address; the popup keeps it.
+  const { search } = useLocation()
   const base = `/notes/${String(noteType.id)}`
   const popup = useListPopup({
     items: orderedIds,
     current: noteId,
     noun: 'note',
-    listPath: base,
-    itemPath: (id) => `${base}/${String(id)}`,
+    listPath: `${base}${search}`,
+    itemPath: (id) => `${base}/${String(id)}${search}`,
   })
   if (state.status !== 'ready') return null
 

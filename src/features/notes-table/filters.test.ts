@@ -71,6 +71,10 @@ describe('filterRows', () => {
 
   it('deck, card count and date filters', () => {
     expect(ids(filterRows(rows, '', { decks: { kind: 'decks', decks: ['Deutsch', 'Geo'] } }))).toEqual([1, 2, 3])
+    // A deck includes its subdecks.
+    const nested = [note(1, ['a'], { decks: ['Lang::French'] }), note(2, ['b'], { decks: ['Lang'] }), note(3, ['c'], { decks: ['Language'] })]
+    expect(ids(filterRows(nested, '', { decks: { kind: 'decks', decks: ['Lang'] } }))).toEqual([1, 2])
+    expect(ids(filterRows(nested, '', { decks: { kind: 'decks', decks: ['Lang::French'] } }))).toEqual([1])
     expect(ids(filterRows(rows, '', { cards: { kind: 'range', min: 2, max: null } }))).toEqual([1, 2])
     expect(ids(filterRows(rows, '', { created: { kind: 'date', from: '2024-03-02', to: '2024-03-03' } }))).toEqual([2, 3])
     expect(ids(filterRows(rows, '', { modified: { kind: 'date', from: '', to: '2024-04-01' } }))).toEqual([1])

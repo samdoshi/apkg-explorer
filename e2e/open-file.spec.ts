@@ -32,8 +32,25 @@ test('sample deck opens to its notes and overview, and a reload forgets it', asy
     'Country',
     'Quiz (shuffled options)',
   ])
-  await expect(page.getByRole('region', { name: 'Decks' })).toContainText('Sample::Geography')
   await saveScreen(noteTypes, 'overview-note-types')
+  const decks = page.getByRole('region', { name: 'Decks' })
+  await expect(decks.getByRole('link')).toHaveText(['Sample', 'Geography', 'Languages', 'Science'])
+  await saveScreen(decks, 'overview-decks')
+
+  // A deck opens the notes table at the note type it has most of, showing only that deck's
+  // notes; the deck filter is in the address and stays when switching note type.
+  await decks.getByRole('link', { name: 'Languages' }).click()
+  await expect(page).toHaveURL(/#\/notes\/\d+\?deck=Sample%3A%3ALanguages$/)
+  await expect(page.getByRole('table', { name: 'Basic (and reversed card) notes' })).toBeVisible()
+  const chips = page.getByRole('list', { name: 'Active filters' })
+  await expect(chips).toHaveText('Deck: Sample::Languages')
+  await page.getByRole('combobox', { name: 'Note type' }).click()
+  await page.getByRole('option', { name: /^Basic \d/ }).click()
+  await expect(page.getByRole('table', { name: 'Basic notes' })).toBeVisible()
+  await expect(chips).toHaveText('Deck: Sample::Languages')
+  await expect(page.getByRole('status')).toHaveText(/^Showing 1 note of \d+$/)
+  await chips.getByRole('button', { name: 'Remove filter: Deck: Sample::Languages' }).click()
+  await expect(page).toHaveURL(/#\/notes\/\d+$/)
 
   // The start screen offers a way back while the file is open.
   await page.getByRole('link', { name: 'Open another file' }).click()

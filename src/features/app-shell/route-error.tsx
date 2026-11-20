@@ -39,7 +39,7 @@ export function PopupError({ noun }: { noun: 'note' | 'file' }) {
   const close = () => {
     // As the popups themselves do: Back if opened from the list, else up to the list.
     if (isOpenedFromList(location.state)) void navigate(-1)
-    else void navigate('..', { replace: true })
+    else void navigate({ pathname: '..', search: location.search }, { replace: true })
   }
   return (
     <Dialog

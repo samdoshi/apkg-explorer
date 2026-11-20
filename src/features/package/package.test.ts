@@ -51,6 +51,15 @@ describe('current format (collection.anki21b)', () => {
       ['Sample::Languages', 10],
       ['Sample::Science', 12],
     ])
+    // Notes per deck and note type, for the Overview's deck links.
+    const typeName = (id: number) => summary.noteTypes.find((t) => t.id === id)?.name
+    const languages = summary.decks.find((d) => d.name === 'Sample::Languages')
+    const counts = languages?.notesByType.map((entry) => `${typeName(entry.noteTypeId) ?? '?'}: ${String(entry.count)}`)
+    expect(counts?.sort((a, b) => a.localeCompare(b))).toEqual([
+      'Basic (and reversed card): 4',
+      'Basic (type in the answer): 1',
+      'Basic: 1',
+    ])
     pkg.close()
   })
 

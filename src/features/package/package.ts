@@ -46,6 +46,8 @@ export interface DeckSummary {
   filtered: boolean
   /** Cards whose home deck this is; for a filtered deck, the cards in it. */
   cardCount: number
+  /** Notes with a card whose home deck this is, by note type (none for a filtered deck). */
+  notesByType: { noteTypeId: number; count: number }[]
 }
 
 export interface PackageSummary {
@@ -148,6 +150,15 @@ export class AnkiPackage {
     // A card in a filtered deck counts towards its home deck (odid) and the filtered deck.
     const cardsByHomeDeck = countsBy(`SELECT ${HOME_DECK}, count(*) FROM cards GROUP BY 1`)
     const cardsInFilteredDecks = countsBy('SELECT did, count(*) FROM cards WHERE odid != 0 GROUP BY did')
+    const notesByDeck = new Map<number, { noteTypeId: number; count: number }[]>()
+    for (const [deck, noteType, count] of queryRows(
+      this.db,
+      `SELECT ${HOME_DECK}, notes.mid, count(DISTINCT notes.id) FROM cards JOIN notes ON notes.id = cards.nid GROUP BY 1, 2`,
+    )) {
+      const list = notesByDeck.get(asNumber(deck)) ?? []
+      list.push({ noteTypeId: asNumber(noteType), count: asNumber(count) })
+      notesByDeck.set(asNumber(deck), list)
+    }
 
     return {
       fileName: this.fileName,
@@ -175,6 +186,7 @@ export class AnkiPackage {
         .map((deck) => ({
           ...deck,
           cardCount: (deck.filtered ? cardsInFilteredDecks : cardsByHomeDeck).get(deck.id) ?? 0,
+          notesByType: deck.filtered ? [] : (notesByDeck.get(deck.id) ?? []),
         }))
         .filter((deck) => deck.cardCount > 0)
         .sort((a, b) => compareText(a.name, b.name)),

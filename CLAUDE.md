@@ -28,7 +28,8 @@ src/index.css           Tailwind + shadcn theme (dark mode = prefers-color-schem
 src/components/ui/      shadcn components (generated; add with the CLI, below)
 src/lib/                shared helpers: format.ts (numbers, sizes, dates, name order),
                         use-virtual-rows.ts (virtual rows + keyboard focus for both tables) and
-                        opened-from-list.ts (popups opened from a list close with Back)
+                        opened-from-list.ts (popups opened from a list close with Back),
+                        decks.ts (deck names: parents, "in this deck or a subdeck")
 src/features/<name>/    code grouped by feature:
   app-shell/            layout, header, drop overlay, RequirePackage route guard,
                         route-error.tsx (errorElements: a page or popup that fails while drawing),
@@ -45,7 +46,8 @@ src/features/<name>/    code grouped by feature:
                         rows. Search and column filters are plain functions in filters.ts,
                         applied before the table sorts. Rows come from the worker
                         (getNotes -> NoteRow, plain text built by package/html-text.ts)
-  overview/             #/overview: package summary (format, counts, note types, decks)
+  overview/             #/overview: package summary (format, counts, note types, decks);
+                        deck-tree.ts builds the deck tree and picks each deck's link
   card-viewer/          #/notes/:noteTypeId/:noteId: the note popup, a child route of the table so
                         Back closes it. template.ts + cloze.ts + template-filters.ts = Anki's
                         template language; card-html.ts = reviewer extras (type answers, [sound:]);
@@ -136,8 +138,8 @@ Checks
 - Save screenshots of key screens at 1280x800 to `test-results/screens/`. After a visual change,
   open only the screenshots that `check:ui` reports as new or changed, preferring element
   screenshots to full-page ones. The report compares file hashes, so Chromium's rendering noise
-  (1-2 colour levels on anti-aliased edges, seen on `media-font.png`, `card-maths.png` and
-  `filter-tags.png`) can mark an untouched screen as changed.
+  (1-2 colour levels on anti-aliased edges, seen on `media-font.png`, `card-maths.png`,
+  `filter-tags.png` and `media-missing.png`) can mark an untouched screen as changed.
 
 Guardrails
 - npm with exact versions (`save-exact=true` in `.npmrc`). Ask before adding any dependency

@@ -1,4 +1,5 @@
 import type { NoteRow } from '@/features/package/note-row'
+import { isInDeck } from '@/lib/decks'
 import { normalizeForSearch, searchWords } from '@/lib/search'
 
 /** Column ids: one per field ("field:0", "field:1", …) plus the fixed columns. */
@@ -24,6 +25,7 @@ export interface TagsFilter {
 }
 export interface DecksFilter {
   kind: 'decks'
+  /** Each includes its subdecks, as in Anki's search. */
   decks: string[]
 }
 export interface RangeFilter {
@@ -104,8 +106,8 @@ function compile(columnId: ColumnId, filter: ColumnFilter): (row: NoteRow) => bo
       }
     }
     case 'decks': {
-      const wanted = new Set(filter.decks)
-      return (row) => row.decks.some((deck) => wanted.has(deck))
+      const wanted = filter.decks
+      return (row) => row.decks.some((deck) => wanted.some((name) => isInDeck(deck, name)))
     }
     case 'range': {
       const { min, max } = filter

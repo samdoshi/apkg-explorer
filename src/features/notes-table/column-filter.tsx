@@ -287,7 +287,9 @@ function DecksEditor({
   const selected = filter?.decks ?? []
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted-foreground">Notes with a card in any of these decks:</p>
+      <p className="text-sm text-muted-foreground">
+        Notes with a card in any of these decks (a deck includes its subdecks):
+      </p>
       <Checklist
         label="Decks"
         facets={facets}
