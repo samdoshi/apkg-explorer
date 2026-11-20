@@ -23,26 +23,37 @@ async function readStylesheets(media: MediaCache, names: string[]): Promise<Styl
   }
 }
 
+type Read = { contents: FrameContent[] } & ({ scan: ContentScan } | { error: unknown })
+
 /**
  * What some content does and needs (see scanContent). Content that uses stylesheets from
- * the package is scanned again once they're read; until then this is null.
+ * the package is scanned again once they're read; until then this is null. A scan that
+ * fails is thrown while rendering, as a failure in the first scan would be, so the route's
+ * error message shows instead of a spinner that never stops.
  */
 export function useContentScan(client: PackageClient, contents: FrameContent[]): ContentScan | null {
   const first = useMemo(() => ({ report: scanContent(contents), stylesheets: NO_STYLESHEETS }), [contents])
   const usesStylesheets = first.report.stylesheets.length > 0
-  const [read, setRead] = useState<{ contents: FrameContent[]; scan: ContentScan } | null>(null)
+  const [read, setRead] = useState<Read | null>(null)
 
   useEffect(() => {
     if (!usesStylesheets) return
     let cancelled = false
-    void scanWithStylesheets(contents, (names) => readStylesheets(client.media, names)).then((scan) => {
-      if (!cancelled) setRead({ contents, scan })
-    })
+    scanWithStylesheets(contents, (names) => readStylesheets(client.media, names)).then(
+      (scan) => {
+        if (!cancelled) setRead({ contents, scan })
+      },
+      (error: unknown) => {
+        if (!cancelled) setRead({ contents, error })
+      },
+    )
     return () => {
       cancelled = true
     }
   }, [client, contents, usesStylesheets])
 
   if (!usesStylesheets) return first
-  return read?.contents === contents ? read.scan : null
+  if (read?.contents !== contents) return null
+  if ('error' in read) throw read.error
+  return read.scan
 }

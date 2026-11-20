@@ -48,6 +48,8 @@ messages we need are decoded by a small hand-written decoder (no protobuf librar
   is shown as the heading instead.
 - **Columns**, in order: each field of the note type (in field order), then Tags, Deck(s),
   Cards (count), Created, Modified.
+  _Decks are the cards' home decks: a card sitting in a filtered deck is listed under the deck
+  it came from, as in the card popup._
   - Field cells show plain text: HTML stripped, entities decoded, whitespace collapsed, long
     text truncated with the full text in a tooltip. Images show as an image icon + file name,
     `[sound:…]` as a speaker icon + file name. Cloze markup is shown as written (like Anki's
@@ -86,7 +88,8 @@ closes the popup.
 - Each card tab shows **Front** and **Back** side by side (stacked on narrow screens). The back
   is rendered as Anki renders it, so it normally includes the front via `{{FrontSide}}`.
   Below them: the card's deck and, if the export included scheduling, due/interval/ease/
-  reviews/lapses.
+  reviews/lapses. _A card in a filtered deck shows its home deck, the filtered deck, and the
+  due date it has in its home deck (Anki keeps that in `odue`)._
 - **Note** tab: every field rendered (with media), tags, note id, created/modified dates.
 - **Previous / Next** buttons step through notes in the table's current sort and filter order
   (also `[` and `]` keys). `Esc` closes.
@@ -225,7 +228,12 @@ _As built (step 5):_
 
 - Header: Notes / Media / Overview links, file name, "Open another file".
   _Overview (`#/overview`) keeps the package summary from step 1: format, counts, note types
-  with their fields and card types, and decks._
+  with their fields and card types, and decks. Filtered decks are marked as such; a card in
+  one counts towards it and towards its home deck._
+- _A page or popup that fails while it draws (cards are built from the deck's own templates
+  and HTML as they're shown) is replaced by a short message saying what went wrong, with the
+  header still there; a failed popup closes like the popups do. A package whose note type or
+  deck list can't be read is reported as damaged when it's opened._
 - Light and dark follow the system (`prefers-color-scheme`). No toggle, because it couldn't be
   remembered.
 - Keyboard accessible throughout (shadcn/Radix primitives, visible focus, labelled controls).
@@ -271,7 +279,8 @@ _As built (step 5):_
   TrueType pixel font drawn by the script (Latin capitals, digits and private use icons, one in
   plane 15, with glyph names) that the Country note type's styling loads through an `@import`ed
   stylesheet, a card
-  with a `<script>`, a card referencing a web image and one referencing a missing file. Output
+  with a `<script>`, a card referencing a web image and one referencing a missing file. The
+  `.colpkg` and `legacy-anki21.apkg` each have cards in a filtered deck. Output
   is deterministic. `fixtures/sample.apkg` is also the in-app sample deck. Vitest also runs
   against any files in `fixtures/real/`. _Changed from the Node script first planned: Python's
   sqlite3 can register Anki's `unicase` collation, so the fixtures use Anki's real schema 18

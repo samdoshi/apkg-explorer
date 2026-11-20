@@ -66,6 +66,11 @@ export class ProtoMessage {
     return this.fields.get(fieldNumber)?.at(-1)
   }
 
+  /** Whether the field is present, e.g. which member of a oneof is set. */
+  has(fieldNumber: number): boolean {
+    return this.fields.has(fieldNumber)
+  }
+
   /** A varint field (uint32, uint64, enum, bool). Missing means 0, as in proto3. */
   uint(fieldNumber: number): number {
     const field = this.last(fieldNumber)

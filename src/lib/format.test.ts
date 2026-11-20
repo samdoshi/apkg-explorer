@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { formatBytes, formatCount } from './format'
+import { formatBytes, formatCount, formatNumber } from './format'
 
 describe('formatCount', () => {
   it('pluralises and groups digits', () => {
     expect(formatCount(1, 'note')).toBe('1 note')
     expect(formatCount(12345, 'card')).toBe('12,345 cards')
     expect(formatCount(2, 'media file')).toBe('2 media files')
+  })
+})
+
+describe('formatNumber', () => {
+  it('groups digits the English way, whatever the browser language', () => {
+    expect(formatNumber(1234567)).toBe('1,234,567')
   })
 })
 

@@ -8,6 +8,7 @@ import {
   readNoteTypes,
   readSchemaVersion,
   replaceUnicaseCollation,
+  type DeckInfo,
   type NoteTypeInfo,
 } from './collection'
 import { PackageError } from './errors'
@@ -39,6 +40,9 @@ export interface NoteTypeSummary {
 export interface DeckSummary {
   id: number
   name: string
+  /** A filtered deck: its cards also count towards their home decks. */
+  filtered: boolean
+  /** Cards whose home deck this is; for a filtered deck, the cards in it. */
   cardCount: number
 }
 
@@ -75,6 +79,9 @@ export class AnkiPackage {
   private readonly format: PackageFormat
   private readonly entries: Map<string, FileEntry>
   private readonly media: Map<string, MediaFile>
+  private readonly noteTypes: Map<number, NoteTypeInfo>
+  private readonly decks: DeckInfo[]
+  private readonly deckNames: Map<number, string>
 
   private constructor(options: {
     file: Blob
@@ -83,6 +90,7 @@ export class AnkiPackage {
     format: PackageFormat
     entries: Map<string, FileEntry>
     media: MediaFile[]
+    structure: Structure
   }) {
     this.file = options.file
     this.fileName = options.fileName
@@ -90,6 +98,9 @@ export class AnkiPackage {
     this.format = options.format
     this.entries = options.entries
     this.media = new Map(options.media.map((file) => [file.name, file]))
+    this.noteTypes = new Map(options.structure.noteTypes.map((noteType) => [noteType.id, noteType]))
+    this.decks = options.structure.decks
+    this.deckNames = new Map(this.decks.map((deck) => [deck.id, deck.name]))
   }
 
   /**
@@ -113,8 +124,14 @@ export class AnkiPackage {
 
     const raw = await readBytes(file, found.entry)
     const db = openDatabase(sql, found.format === 'anki21b' ? await unzstd(raw) : raw)
-    const media = await readMediaMap(file, entries)
-    return new AnkiPackage({ file, fileName, db, format: found.format, entries, media })
+    try {
+      const structure = readStructure(db)
+      const media = await readMediaMap(file, entries)
+      return new AnkiPackage({ file, fileName, db, format: found.format, entries, media, structure })
+    } catch (error) {
+      db.close()
+      throw error
+    }
   }
 
   summary(): PackageSummary {
@@ -126,7 +143,9 @@ export class AnkiPackage {
     const cardsByType = countsBy(
       'SELECT notes.mid, count(*) FROM cards JOIN notes ON notes.id = cards.nid GROUP BY notes.mid',
     )
-    const cardsByDeck = countsBy('SELECT did, count(*) FROM cards GROUP BY did')
+    // A card in a filtered deck counts towards its home deck (odid) and the filtered deck.
+    const cardsByHomeDeck = countsBy(`SELECT ${HOME_DECK}, count(*) FROM cards GROUP BY 1`)
+    const cardsInFilteredDecks = countsBy('SELECT did, count(*) FROM cards WHERE odid != 0 GROUP BY did')
 
     return {
       fileName: this.fileName,
@@ -137,7 +156,7 @@ export class AnkiPackage {
       noteCount: count('SELECT count(*) FROM notes'),
       cardCount: count('SELECT count(*) FROM cards'),
       mediaCount: this.media.size,
-      noteTypes: readNoteTypes(this.db)
+      noteTypes: [...this.noteTypes.values()]
         .map((noteType) => ({
           id: noteType.id,
           name: noteType.name,
@@ -150,8 +169,11 @@ export class AnkiPackage {
           cardCount: cardsByType.get(noteType.id) ?? 0,
         }))
         .sort((a, b) => collator.compare(a.name, b.name)),
-      decks: readDecks(this.db)
-        .map((deck) => ({ ...deck, cardCount: cardsByDeck.get(deck.id) ?? 0 }))
+      decks: this.decks
+        .map((deck) => ({
+          ...deck,
+          cardCount: (deck.filtered ? cardsInFilteredDecks : cardsByHomeDeck).get(deck.id) ?? 0,
+        }))
         .filter((deck) => deck.cardCount > 0)
         .sort((a, b) => collator.compare(a.name, b.name)),
     }
@@ -159,13 +181,13 @@ export class AnkiPackage {
 
   /** Every note of one note type, in creation order, ready for the table. */
   notes(noteTypeId: number): NoteRow[] {
-    const noteType = readNoteTypes(this.db).find((type) => type.id === noteTypeId)
-    const fieldCount = noteType?.fields.length ?? 0
-    const deckNames = new Map(readDecks(this.db).map((deck) => [deck.id, deck.name]))
+    const fieldCount = this.noteTypes.get(noteTypeId)?.fields.length ?? 0
     const rows: NoteRow[] = []
+    // Home decks, as in the card popup: a filtered deck only borrows cards. (The notes
+    // table has no deck columns, so HOME_DECK's names are the card's.)
     const statement = this.db.prepare(
       `SELECT notes.id, notes.mod, notes.tags, notes.flds,
-              group_concat(DISTINCT cards.did), count(cards.id)
+              group_concat(DISTINCT ${HOME_DECK}), count(cards.id)
        FROM notes LEFT JOIN cards ON cards.nid = notes.id
        WHERE notes.mid = ?
        GROUP BY notes.id
@@ -187,7 +209,7 @@ export class AnkiPackage {
         const decks = String(deckIds ?? '')
           .split(',')
           .filter(Boolean)
-          .map((deckId) => deckNames.get(Number(deckId)) ?? `Unknown deck ${deckId}`)
+          .map((deckId) => this.deckName(Number(deckId)))
         rows.push({
           id: Number(id),
           fields,
@@ -208,7 +230,7 @@ export class AnkiPackage {
 
   /** A note type's fields, templates and CSS, for rendering cards. */
   noteType(noteTypeId: number): NoteTypeInfo | null {
-    return readNoteTypes(this.db).find((type) => type.id === noteTypeId) ?? null
+    return this.noteTypes.get(noteTypeId) ?? null
   }
 
   /** One note with its raw field HTML and its cards. Null if there's no such note. */
@@ -216,24 +238,24 @@ export class AnkiPackage {
     const [note] = queryRows(this.db, 'SELECT id, mid, mod, tags, flds FROM notes WHERE id = ?', [noteId])
     if (!note) return null
     const [id, mid, mod, tags, flds] = note
-    const deckNames = new Map(readDecks(this.db).map((deck) => [deck.id, deck.name]))
     const cards = queryRows(
       this.db,
-      `SELECT id, ord, did, odid, type, queue, due, ivl, factor, reps, lapses, flags
+      `SELECT id, ord, did, odid, type, queue, due, odue, ivl, factor, reps, lapses, flags
        FROM cards WHERE nid = ? ORDER BY ord, id`,
       [noteId],
     ).map((row): CardDetail => {
-      const [cardId, ord, did, odid, type, queue, due, ivl, factor, reps, lapses, flags] =
+      const [cardId, ord, did, odid, type, queue, due, odue, ivl, factor, reps, lapses, flags] =
         row.map(asNumber)
-      // A card in a filtered deck remembers its home deck in odid.
-      const deckId = odid ? odid : (did ?? 0)
+      // A card in a filtered deck keeps its home deck in odid and its real due date in odue.
+      const filtered = odid !== undefined && odid !== 0
       return {
         id: cardId ?? 0,
         ord: ord ?? 0,
-        deckName: deckNames.get(deckId) ?? `Unknown deck ${String(deckId)}`,
+        deckName: this.deckName(filtered ? odid : did),
+        filteredDeckName: filtered ? this.deckName(did) : null,
         type: type ?? 0,
         queue: queue ?? 0,
-        due: due ?? 0,
+        due: (filtered ? odue : due) ?? 0,
         interval: ivl ?? 0,
         factor: factor ?? 0,
         reps: reps ?? 0,
@@ -283,9 +305,32 @@ export class AnkiPackage {
     this.db.close()
   }
 
+  private deckName(deckId = 0): string {
+    return this.deckNames.get(deckId) ?? `Unknown deck ${String(deckId)}`
+  }
+
   private findMedia(name: string | null): MediaFile | undefined {
     if (!name) return undefined
     return this.media.get(name) ?? this.media.get(name.normalize('NFC'))
+  }
+}
+
+/** A card's home deck: the deck it came from if it sits in a filtered deck. */
+const HOME_DECK = 'CASE WHEN odid != 0 THEN odid ELSE did END'
+
+interface Structure {
+  noteTypes: NoteTypeInfo[]
+  decks: DeckInfo[]
+}
+
+/** Note types and decks don't change while a file is open, so they're read once. */
+function readStructure(db: Database): Structure {
+  try {
+    return { noteTypes: readNoteTypes(db), decks: readDecks(db) }
+  } catch (error) {
+    if (error instanceof PackageError) throw error
+    // Broken JSON (older schemas) or protobuf (schema 18) in a database SQLite could read.
+    throw new PackageError('corrupt', 'unreadable note types or decks')
   }
 }
 

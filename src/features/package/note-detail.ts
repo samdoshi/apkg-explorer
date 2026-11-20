@@ -5,11 +5,16 @@ export interface CardDetail {
   ord: number
   /** The card's home deck (its original deck if it sits in a filtered deck). */
   deckName: string
+  /** The filtered deck the card sits in, if any. */
+  filteredDeckName: string | null
   /** 0 new, 1 learning, 2 review, 3 relearning. */
   type: number
   /** 0 new, 1 learning, 2 review, 3 day learning, 4 preview, -1 suspended, -2/-3 buried. */
   queue: number
-  /** New: position. Review and day learning: days since the collection was created. Learning: epoch seconds. */
+  /**
+   * New: position. Review and day learning: days since the collection was created. Learning:
+   * epoch seconds. For a card in a filtered deck, the due date it had in its home deck.
+   */
   due: number
   /** Days (negative: seconds, for learning cards). */
   interval: number

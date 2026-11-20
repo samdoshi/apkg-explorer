@@ -21,10 +21,9 @@ function dueDate(card: CardDetail, collectionCreated: number): number | null {
 
 /** The card's deck and, if the export kept scheduling, its review state, as label/value pairs. */
 export function describeCard(card: CardDetail, collectionCreated: number): [string, string][] {
-  const items: [string, string][] = [
-    ['Deck', card.deckName],
-    ['State', state(card)],
-  ]
+  const items: [string, string][] = [['Deck', card.deckName]]
+  if (card.filteredDeckName !== null) items.push(['Filtered deck', card.filteredDeckName])
+  items.push(['State', state(card)])
   const due = dueDate(card, collectionCreated)
   if (due !== null) items.push(['Due', formatDate(due)])
   if (card.interval > 0) items.push(['Interval', formatCount(card.interval, 'day')])

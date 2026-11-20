@@ -153,6 +153,31 @@ describe('current format (collection.anki21b)', () => {
     expect(pkg.summary()).toMatchObject({ format: 'anki21b', noteCount: 3, mediaCount: 1 })
     pkg.close()
   })
+
+  it('puts cards in a filtered deck under their home deck, with their real due date', async () => {
+    const pkg = await open('collection.colpkg')
+    const summary = pkg.summary()
+    // The filtered deck's card counts towards Default too.
+    expect(summary.decks.map((d) => [d.name, d.filtered, d.cardCount])).toEqual([
+      ['Default', false, 3],
+      ['Filtered Deck 1', true, 1],
+    ])
+    const [noteType] = summary.noteTypes
+    const rows = pkg.notes(noteType?.id ?? 0)
+    expect(rows.map((row) => [row.fields[0], row.decks])).toEqual([
+      ['Question 1', ['Default']],
+      ['Question 2', ['Default']],
+      ['Question 3', ['Default']],
+    ])
+    const [card] = pkg.note(rows[1]?.id ?? 0)?.cards ?? []
+    expect(card).toMatchObject({ deckName: 'Default', filteredDeckName: 'Filtered Deck 1', type: 2 })
+    // Anki keeps the real due date (days since the collection was made) in odue, and puts
+    // the card's place in the filtered deck in due.
+    expect(card?.due).toBeGreaterThan(30)
+    expect(card?.due).toBeLessThanOrEqual(42)
+    expect(pkg.note(rows[0]?.id ?? 0)?.cards[0]?.filteredDeckName).toBeNull()
+    pkg.close()
+  })
 })
 
 describe('legacy formats', () => {
@@ -176,6 +201,12 @@ describe('legacy formats', () => {
     const summary = pkg.summary()
     expect(summary).toMatchObject({ format: 'anki21', noteCount: 3, cardCount: 5 })
     expect(summary.noteTypes.map((t) => t.name)).toEqual(['Basic', 'Basic (and reversed card)'])
+    // Filtered decks are "dyn" in the JSON deck list.
+    expect(summary.decks.map((d) => [d.name, d.filtered, d.cardCount])).toEqual([
+      ['Cram', true, 2],
+      ['Science', false, 1],
+      ['Spanish', false, 4],
+    ])
     pkg.close()
   })
 })
@@ -186,6 +217,7 @@ describe('invalid files', () => {
     ['no-collection.apkg', 'no-collection'],
     ['future-version.apkg', 'newer-version'],
     ['corrupt-collection.apkg', 'corrupt'],
+    ['damaged-note-types.apkg', 'corrupt'],
   ])('rejects %s with code %s', async (name, code) => {
     await expect(open(join('invalid', name))).rejects.toMatchObject({ code })
   })

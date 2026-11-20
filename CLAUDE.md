@@ -27,7 +27,8 @@ src/components/ui/      shadcn components (generated; add with the CLI, below)
 src/lib/                shared helpers, incl. use-virtual-rows.ts (virtual rows + keyboard focus for
                         both tables) and opened-from-list.ts (popups opened from a list close with Back)
 src/features/<name>/    code grouped by feature:
-  app-shell/            layout, header, drop overlay, RequirePackage route guard
+  app-shell/            layout, header, drop overlay, RequirePackage route guard,
+                        route-error.tsx (errorElements: a page or popup that fails while drawing)
   open-file/            start screen, file picker, window-wide drag and drop, sample deck
   package/              .apkg reader (zip, zstd, protobuf, media map, schema 11/18), the Web
                         Worker that runs it, PackageClient (main-thread RPC) and React context

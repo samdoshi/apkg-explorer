@@ -80,7 +80,14 @@ function Overview({ summary }: { summary: PackageSummary }) {
         <ul className="divide-y rounded-xl border">
           {summary.decks.map((deck) => (
             <li key={deck.id} className="flex items-center justify-between gap-4 px-4 py-2.5 text-sm">
-              <span className="min-w-0 break-words">{deck.name}</span>
+              <span className="flex min-w-0 flex-wrap items-center gap-2">
+                <span className="min-w-0 break-words">{deck.name}</span>
+                {deck.filtered && (
+                  <Badge variant="outline" title="Its cards are borrowed from their home decks">
+                    Filtered
+                  </Badge>
+                )}
+              </span>
               <span className="shrink-0 text-muted-foreground">
                 {formatCount(deck.cardCount, 'card')}
               </span>

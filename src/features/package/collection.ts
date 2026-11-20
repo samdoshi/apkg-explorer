@@ -28,9 +28,13 @@ export interface NoteTypeInfo {
 export interface DeckInfo {
   id: number
   name: string
+  /** A filtered deck borrows cards from their home decks (cards.odid keeps the home deck). */
+  filtered: boolean
 }
 
 const IMAGE_OCCLUSION_STOCK_KIND = 6
+/** DeckKindContainer, schema 18's `decks.kind`: field 1 is a normal deck, 2 a filtered one. */
+const FILTERED_DECK_KIND = 2
 
 /** Runs a query and returns every row as an array of column values. */
 export function queryRows(db: Database, sql: string, params?: (string | number)[]): unknown[][] {
@@ -84,15 +88,17 @@ export function readNoteTypes(db: Database): NoteTypeInfo[] {
 export function readDecks(db: Database): DeckInfo[] {
   if (usesSeparateTables(db)) {
     // Schema 18 separates deck name levels with \x1f instead of "::".
-    return queryRows(db, 'SELECT id, name FROM decks').map(([id, name]) => ({
+    return queryRows(db, 'SELECT id, name, kind FROM decks').map(([id, name, kind]) => ({
       id: asNumber(id),
       name: asString(name).replaceAll('\x1f', '::'),
+      filtered: ProtoMessage.decode(asBytes(kind)).has(FILTERED_DECK_KIND),
     }))
   }
   const json = parseJsonObject(queryRows(db, 'SELECT decks FROM col')[0]?.[0])
   return Object.values(json).flatMap((deck) => {
     if (!isRecord(deck)) return []
-    return [{ id: asNumber(deck.id), name: asString(deck.name) }]
+    // "dyn" (dynamic) is the old name for a filtered deck.
+    return [{ id: asNumber(deck.id), name: asString(deck.name), filtered: deck.dyn === 1 || deck.dyn === true }]
   })
 }
 

@@ -12,8 +12,10 @@ Packages written (see SPEC.md section 1 for the formats):
   fixtures/sample.apkg              current format: collection.anki21b (zstd, schema 18),
                                     protobuf media map, zstd media, plus the dummy anki2
   fixtures/legacy-anki2.apkg        Anki 2.0/2.1 legacy: collection.anki2 (schema 11), JSON map
-  fixtures/legacy-anki21.apkg       collection.anki21 (schema 11, WAL header) + dummy anki2
-  fixtures/collection.colpkg        current format collection package
+  fixtures/legacy-anki21.apkg       collection.anki21 (schema 11, WAL header) + dummy anki2;
+                                    one note's cards sit in a filtered deck (JSON "dyn")
+  fixtures/collection.colpkg        current format collection package; one card sits in a
+                                    filtered deck (protobuf deck kind), with its real due in odue
   fixtures/large.apkg               current format, 5,000 text-only notes (virtual scrolling)
   fixtures/invalid/*.apkg           files the app must reject with a clear message
 """
@@ -183,6 +185,8 @@ class Note:
     deck: str
     tags: list[str] = field(default_factory=list)
     reviews: dict[int, Review] = field(default_factory=dict)  # card ord -> scheduling
+    # A filtered deck the note's cards have been moved into; `deck` stays their home deck.
+    filtered_deck: str | None = None
 
 
 @dataclass
@@ -202,10 +206,15 @@ def card_ords(note: Note) -> list[int]:
 def deck_names(package: Package) -> list[str]:
     names = {"Default"}
     for note in package.notes:
-        parts = note.deck.split("::")
-        for i in range(1, len(parts) + 1):
-            names.add("::".join(parts[:i]))
+        for deck in filter(None, [note.deck, note.filtered_deck]):
+            parts = deck.split("::")
+            for i in range(1, len(parts) + 1):
+                names.add("::".join(parts[:i]))
     return sorted(names, key=lambda n: (n != "Default", n))
+
+
+def filtered_deck_names(package: Package) -> set[str]:
+    return {note.filtered_deck for note in package.notes if note.filtered_deck}
 
 
 def deck_ids(package: Package) -> dict[str, int]:
@@ -317,10 +326,11 @@ def build_collection(package: Package, schema: int, wal: bool = False) -> bytes:
 
 def fill_collection(con: sqlite3.Connection, package: Package, schema: int) -> None:
     decks = deck_ids(package)
+    filtered = filtered_deck_names(package)
     mod = BASE_MS // 1000
     if schema == 11:
         models = {str(nt.id): model_json(nt) for nt in package.notetypes}
-        deck_json = {str(i): deck_json_entry(i, name) for name, i in decks.items()}
+        deck_json = {str(i): deck_json_entry(i, name, name in filtered) for name, i in decks.items()}
         con.execute("INSERT INTO col VALUES (1,?,?,?,11,0,0,0,?,?,?,?,?)", (
             CRT, BASE_MS, BASE_MS, json.dumps({"nextPos": 1, "curModel": package.notetypes[0].id}),
             json.dumps(models), json.dumps(deck_json), json.dumps({"1": {"id": 1, "name": "Default"}}),
@@ -335,9 +345,11 @@ def fill_collection(con: sqlite3.Connection, package: Package, schema: int) -> N
                 con.execute("INSERT INTO templates VALUES (?,?,?,?,0,?)",
                             (nt.id, ord_, name, mod, template_config(qfmt, afmt)))
         for name, i in decks.items():
-            # Schema 18 stores deck names with \x1f between levels instead of "::".
+            # Schema 18 stores deck names with \x1f between levels instead of "::", and the
+            # deck's kind as a protobuf oneof: 1 = normal, 2 = filtered.
+            kind = pb_bytes(2 if name in filtered else 1, b"")
             con.execute("INSERT INTO decks VALUES (?,?,?,0,?,?)",
-                        (i, name.replace("::", "\x1f"), mod, b"", pb_bytes(1, b"")))
+                        (i, name.replace("::", "\x1f"), mod, b"", kind))
         con.execute("INSERT INTO deck_config VALUES (1,'Default',?,0,?)", (mod, b""))
         con.execute("INSERT INTO config VALUES ('curModel',0,?,?)", (mod, str(package.notetypes[0].id).encode()))
         for tag in sorted({t for note in package.notes for t in note.tags}):
@@ -360,9 +372,14 @@ def fill_collection(con: sqlite3.Connection, package: Package, schema: int) -> N
                 ivl, factor, reps, lapses = review.ivl, review.factor, review.reps, review.lapses
             else:
                 ctype, queue, due, ivl, factor, reps, lapses = 0, 0, i + position, 0, 0, 0, 0
-            con.execute("INSERT INTO cards VALUES (?,?,?,?,?,-1,?,?,?,?,?,?,?,0,0,0,0,'')", (
-                card_id, note_id, decks[note.deck], ord_, mod + i, ctype, queue, due, ivl,
-                factor, reps, lapses))
+            did, odid, odue = decks[note.deck], 0, 0
+            if note.filtered_deck:
+                # In a filtered deck, odid and odue keep the home deck and the real due date;
+                # due becomes the card's place in the filtered deck.
+                did, odid, odue, due = decks[note.filtered_deck], did, due, -100_000 + position
+            con.execute("INSERT INTO cards VALUES (?,?,?,?,?,-1,?,?,?,?,?,?,?,0,?,?,0,'')", (
+                card_id, note_id, did, ord_, mod + i, ctype, queue, due, ivl,
+                factor, reps, lapses, odue, odid))
 
 
 def model_json(nt: NoteType) -> dict:
@@ -379,8 +396,8 @@ def model_json(nt: NoteType) -> dict:
     }
 
 
-def deck_json_entry(deck_id: int, name: str) -> dict:
-    return {"id": deck_id, "name": name, "desc": "", "dyn": 0, "conf": 1, "collapsed": False,
+def deck_json_entry(deck_id: int, name: str, filtered: bool = False) -> dict:
+    return {"id": deck_id, "name": name, "desc": "", "dyn": 1 if filtered else 0, "conf": 1, "collapsed": False,
             "browserCollapsed": False, "mod": BASE_MS // 1000, "usn": -1, "extendNew": 0,
             "extendRev": 0, "newToday": [0, 0], "revToday": [0, 0], "lrnToday": [0, 0],
             "timeToday": [0, 0]}
@@ -922,7 +939,7 @@ def legacy_anki21_package() -> Package:
     nt_rev, nt_basic = basic_reversed(1_650_000_000_001), basic(1_650_000_000_002)
     notes = [
         Note(nt_rev, ["water", "agua"], "Spanish", ["language::spanish"]),
-        Note(nt_rev, ["bread", "pan"], "Spanish", ["language::spanish"]),
+        Note(nt_rev, ["bread", "pan"], "Spanish", ["language::spanish"], filtered_deck="Cram"),
         Note(nt_basic, ["Which molecule?<br><img src=\"water.svg\">", "H<sub>2</sub>O"], "Science", []),
     ]
     return Package([nt_rev, nt_basic], notes, {"water.svg": WATER_SVG})
@@ -931,6 +948,9 @@ def legacy_anki21_package() -> Package:
 def colpkg_package() -> Package:
     nt_basic = basic(1_680_000_000_001)
     notes = [Note(nt_basic, [f"Question {i}", f"Answer {i}"], "Default", []) for i in range(1, 4)]
+    # A collection backup can have cards sitting in a filtered deck.
+    notes[1].reviews = {0: Review(ivl=12, factor=2500, reps=5, lapses=1)}
+    notes[1].filtered_deck = "Filtered Deck 1"
     return Package([nt_basic], notes, {"water.svg": WATER_SVG})
 
 
@@ -959,6 +979,22 @@ def write_invalid() -> None:
         ("collection.anki2", b"SQLite format 3\x00" + bytes(range(256)) * 8, DEFLATED),
         ("media", b"{}", DEFLATED),
     ])
+    write_zip(folder / "damaged-note-types.apkg", [
+        ("collection.anki2", damaged_note_types_collection(), DEFLATED),
+        ("media", b"{}", DEFLATED),
+    ])
+
+
+def damaged_note_types_collection() -> bytes:
+    """A readable database whose note type list (JSON in col.models) is cut short."""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "collection.db"
+        path.write_bytes(build_collection(legacy_anki2_package(), schema=11))
+        con = sqlite3.connect(path)
+        con.execute("UPDATE col SET models = substr(models, 1, 40)")
+        con.commit()
+        con.close()
+        return path.read_bytes()
 
 
 def main() -> None:

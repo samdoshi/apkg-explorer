@@ -3,7 +3,8 @@ import { escapeHtml } from './escape'
 
 /*
  * Anki's built-in template filters (rslib/src/template_filters.rs), apart from the
- * cloze ones (cloze.ts) and the type-answer ones, which render.ts turns into placeholders.
+ * cloze ones (cloze.ts) and the type-answer ones, which template.ts turns into placeholders
+ * for card-html.ts to fill in.
  */
 
 /** `漢字[かんじ]`, with an optional space before it that separates it from earlier text. */

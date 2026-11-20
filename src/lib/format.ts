@@ -1,4 +1,10 @@
+// The interface is in English, so numbers are written the English way everywhere
+// ("1,234"). Dates follow the browser's locale.
 const numberFormat = new Intl.NumberFormat('en')
+
+export function formatNumber(value: number): string {
+  return numberFormat.format(value)
+}
 
 export function formatCount(count: number, singular: string, pluralForm = `${singular}s`): string {
   return `${numberFormat.format(count)} ${count === 1 ? singular : pluralForm}`

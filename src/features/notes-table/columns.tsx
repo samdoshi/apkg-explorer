@@ -1,5 +1,6 @@
 import type { ColumnDef, SortingFn } from '@tanstack/react-table'
 import type { NoteRow } from '@/features/package/note-row'
+import { formatDate, formatNumber } from '@/lib/format'
 import { FieldCell } from './field-cell'
 import { fieldColumnId, fieldValue, type ColumnId } from './filters'
 
@@ -12,8 +13,6 @@ export interface ColumnInfo {
 }
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
-const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' })
-const numberFormat = new Intl.NumberFormat()
 
 const textSort: SortingFn<NoteRow> = (a, b, columnId) =>
   collator.compare(a.getValue<string>(columnId), b.getValue<string>(columnId))
@@ -83,7 +82,7 @@ export function buildColumns(fieldNames: string[]): {
       size: 96,
       cell: ({ row }) => (
         <span className="w-full text-right tabular-nums">
-          {numberFormat.format(row.original.cardCount)}
+          {formatNumber(row.original.cardCount)}
         </span>
       ),
     },
@@ -93,7 +92,7 @@ export function buildColumns(fieldNames: string[]): {
       accessorFn: (row) => row.created,
       sortingFn: 'basic',
       size: 136,
-      cell: ({ row }) => <span className="truncate">{dateFormat.format(row.original.created)}</span>,
+      cell: ({ row }) => <span className="truncate">{formatDate(row.original.created)}</span>,
     },
     {
       id: 'modified',
@@ -101,7 +100,7 @@ export function buildColumns(fieldNames: string[]): {
       accessorFn: (row) => row.modified,
       sortingFn: 'basic',
       size: 136,
-      cell: ({ row }) => <span className="truncate">{dateFormat.format(row.original.modified)}</span>,
+      cell: ({ row }) => <span className="truncate">{formatDate(row.original.modified)}</span>,
     },
   ]
   const kinds: Record<string, ColumnKind> = {
