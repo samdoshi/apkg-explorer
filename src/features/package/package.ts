@@ -13,7 +13,8 @@ import {
 } from './collection'
 import { PackageError } from './errors'
 import { htmlToText, type MediaRef } from './html-text'
-import { parseLegacyMediaMap, parseMediaEntries, type MediaFile, type MediaListItem } from './media-map'
+import { parseLegacyMediaMap, parseMediaEntries, type MediaFile } from './media-map'
+import { findMediaUsage, type MediaListItem, type MediaUsage, type MediaUse } from './media-usage'
 import { mimeTypeFor } from './mime'
 import type { CardDetail, NoteDetail } from './note-detail'
 import type { NoteRow } from './note-row'
@@ -81,6 +82,8 @@ export class AnkiPackage {
   private readonly noteTypes: Map<number, NoteTypeInfo>
   private readonly decks: DeckInfo[]
   private readonly deckNames: Map<number, string>
+  /** Where each media file is used; worked out when first asked for. */
+  private usage: Promise<Map<string, MediaUsage>> | null = null
 
   private constructor(options: {
     file: Blob
@@ -277,9 +280,39 @@ export class AnkiPackage {
     return [...this.media.values()]
   }
 
-  /** Every media file's name and size, for the media browser. */
-  mediaList(): MediaListItem[] {
-    return this.mediaFiles().map(({ name, size }) => ({ name, size }))
+  /**
+   * The media browser's list: every file in the package with how much it's used, then the
+   * files that notes, templates or styling refer to but the package doesn't have.
+   */
+  async mediaList(): Promise<MediaListItem[]> {
+    const usage = await this.mediaUsage()
+    const item = (name: string, size: number | null, use: MediaUsage | undefined): MediaListItem => ({
+      name,
+      size,
+      missing: use ? !use.inPackage : false,
+      noteCount: use?.noteIds.length ?? 0,
+      usedElsewhere: (use?.places.length ?? 0) > 0,
+    })
+    const missing = [...usage].filter(([, use]) => !use.inPackage)
+    return [
+      ...this.mediaFiles().map(({ name, size }) => item(name, size, usage.get(name))),
+      ...missing.map(([name, use]) => item(name, null, use)),
+    ]
+  }
+
+  /** Where one file (named as in mediaList) is used: the first `limit` notes, and other places. */
+  async mediaUse(name: string, limit = 100): Promise<MediaUse> {
+    const use = (await this.mediaUsage()).get(name)
+    if (!use) return { noteCount: 0, notes: [], places: [] }
+    const ids = use.noteIds.slice(0, limit)
+    const rows = ids.length
+      ? queryRows(this.db, `SELECT id, mid, flds FROM notes WHERE id IN (${ids.map(() => '?').join(',')}) ORDER BY id`, ids)
+      : []
+    const notes = rows.map(([id, mid, flds]) => {
+      const sortField = this.noteTypes.get(asNumber(mid))?.sortFieldIndex ?? 0
+      return { id: asNumber(id), noteTypeId: asNumber(mid), text: htmlToText(asString(flds).split('\x1f')[sortField] ?? '').text }
+    })
+    return { noteCount: use.noteIds.length, notes, places: use.places }
   }
 
   /**
@@ -288,7 +321,7 @@ export class AnkiPackage {
    * editors write `my%20file.jpg` in the HTML for `my file.jpg`).
    */
   async readMedia(name: string): Promise<Blob | null> {
-    const media = this.findMedia(name) ?? this.findMedia(percentDecode(name))
+    const media = this.findFile(name)
     const entry = media && this.entries.get(media.zipName)
     if (!entry) return null
     const type = mimeTypeFor(name)
@@ -306,6 +339,43 @@ export class AnkiPackage {
 
   private deckName(deckId = 0): string {
     return this.deckNames.get(deckId) ?? `Unknown deck ${String(deckId)}`
+  }
+
+  /** A file as cards name it: as written, NFC-normalised, or percent-decoded. */
+  private findFile(name: string): MediaFile | undefined {
+    return this.findMedia(name) ?? this.findMedia(percentDecode(name))
+  }
+
+  private mediaUsage(): Promise<Map<string, MediaUsage>> {
+    this.usage ??= findMediaUsage({
+      notes: this.allNoteFields(),
+      noteTypes: [...this.noteTypes.values()],
+      resolve: (reference) => this.findFile(reference)?.name ?? null,
+      readText: async (name) => {
+        try {
+          return (await (await this.readMedia(name))?.text()) ?? null
+        } catch {
+          return null
+        }
+      },
+    }).catch((error: unknown) => {
+      // Try again next time.
+      this.usage = null
+      throw error
+    })
+    return this.usage
+  }
+
+  private *allNoteFields(): Generator<{ id: number; fields: string }> {
+    const statement = this.db.prepare('SELECT id, flds FROM notes ORDER BY id')
+    try {
+      while (statement.step()) {
+        const [id, flds] = statement.get()
+        yield { id: asNumber(id), fields: asString(flds) }
+      }
+    } finally {
+      statement.free()
+    }
   }
 
   private findMedia(name: string | null): MediaFile | undefined {

@@ -56,13 +56,9 @@ describe('current format (collection.anki21b)', () => {
 
   it('lists media and decompresses files on demand', async () => {
     const pkg = await open('sample.apkg')
-    expect(pkg.summary().mediaCount).toBe(19)
+    expect(pkg.summary().mediaCount).toBe(20)
     const flag = pkg.mediaFiles().find((m) => m.name === 'flag-japan.png')
     expect(flag?.size).toBeGreaterThan(100)
-    // The media browser's list: names and sizes only.
-    const list = pkg.mediaList()
-    expect(list).toHaveLength(19)
-    expect(list.find((m) => m.name === 'flag-japan.png')).toEqual({ name: 'flag-japan.png', size: flag?.size })
 
     const png = await pkg.readMedia('flag-japan.png')
     expect(png?.type).toBe('image/png')
@@ -145,6 +141,40 @@ describe('current format (collection.anki21b)', () => {
     const texts = pkg.notes(basic?.id ?? 0).map((row) => row.fields.join(' | '))
     expect(texts).toContain('What is the chemical symbol for gold? | Au (from Latin aurum)')
     expect(texts).toContain('Speed of light in a vacuum? | 299 792 458 m/s')
+    pkg.close()
+  })
+
+  it('finds where each media file is used, and the files that are unused or missing', async () => {
+    const pkg = await open('sample.apkg')
+    const list = await pkg.mediaList()
+    // The package's 20 files, then the one a note refers to that isn't there.
+    expect(list).toHaveLength(21)
+    const item = (name: string) => list.find((file) => file.name === name)
+    const flag = pkg.mediaFiles().find((m) => m.name === 'flag-japan.png')
+    expect(item('flag-japan.png')).toEqual({
+      name: 'flag-japan.png',
+      size: flag?.size,
+      missing: false,
+      noteCount: 1,
+      usedElsewhere: false,
+    })
+    expect(list.at(-1)).toEqual({ name: 'missing-picture.png', size: null, missing: true, noteCount: 1, usedElsewhere: false })
+    const unused = list.filter((file) => !file.missing && file.noteCount === 0 && !file.usedElsewhere)
+    expect(unused.map((file) => file.name)).toEqual(['old-diagram.png'])
+
+    // Templates, styling, and a stylesheet the styling @imports.
+    expect((await pkg.mediaUse('_globe.svg')).places).toEqual([{ kind: 'templates', noteType: 'Country' }])
+    expect((await pkg.mediaUse('_shuffle.js')).places).toEqual([{ kind: 'templates', noteType: 'Quiz (shuffled options)' }])
+    expect((await pkg.mediaUse('_waves.svg')).places).toEqual([{ kind: 'styling', noteType: 'Country' }])
+    expect((await pkg.mediaUse('_country.css')).places).toEqual([{ kind: 'styling', noteType: 'Country' }])
+    expect((await pkg.mediaUse('_pixel.ttf')).places).toEqual([{ kind: 'stylesheet', name: '_country.css' }])
+
+    const france = await pkg.mediaUse('flag-france.png')
+    expect(france).toMatchObject({ noteCount: 1, places: [] })
+    expect(france.notes.map((note) => note.text)).toEqual(['France'])
+    const missing = await pkg.mediaUse('missing-picture.png')
+    expect(missing.notes.map((note) => note.text)).toEqual(["This card refers to a file that isn't in the package."])
+    expect(await pkg.mediaUse('old-diagram.png')).toEqual({ noteCount: 0, notes: [], places: [] })
     pkg.close()
   })
 

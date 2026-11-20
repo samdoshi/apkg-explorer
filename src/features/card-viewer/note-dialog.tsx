@@ -16,11 +16,11 @@ import { formatDate } from '@/lib/format'
 import { usePrefersDark } from '@/lib/use-prefers-dark'
 import { canPlay } from './can-play'
 import { CardFrame } from './card-frame'
-import { stripClozes } from './cloze'
 import type { FrameContent, FrameDocument } from './card-document'
 import { ContentNotices } from './content-notices'
 import { useContentPermissions } from './content-permissions'
 import type { NoteDialogContext } from './note-dialog-context'
+import { noteTitle } from './note-title'
 import { prepareCards, prepareNote, type CardView } from './prepare'
 import { describeCard } from './scheduling'
 import { useContentScan } from './use-content-scan'
@@ -46,7 +46,7 @@ export function NoteDialog() {
   if (state.status !== 'ready') return null
 
   const sortField = context.rowFor(noteId)?.fields[noteType.sortFieldIndex] ?? ''
-  const title = (noteType.kind === 'cloze' ? stripClozes(sortField) : sortField).trim() || 'Note'
+  const title = noteTitle(noteType.kind, sortField) || 'Note'
 
   return (
     <ListPopup

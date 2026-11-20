@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { MediaHandle } from '@/features/package/media-cache'
 import { buildFrame, scanContent, scanWithStylesheets, type FrameContent } from './card-document'
 import { ContentCleaner, mergeReports, webHosts, type CleanOptions } from './sanitize'
-import { classifyUrl, rewriteCssUrls } from './urls'
+import { classifyUrl, rewriteCssUrls } from '@/features/package/urls'
 
 const media = new Map<string, Blob>([
   ['flag.png', new Blob(['png'])],

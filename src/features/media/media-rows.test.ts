@@ -2,21 +2,26 @@ import { describe, expect, it } from 'vitest'
 import {
   buildMediaRows,
   countKinds,
+  countUsage,
   extensionLabel,
   filterMediaRows,
   isKindFilter,
+  isUsageFilter,
+  matchesUsage,
   mediaPath,
   totalSize,
+  type UsageFilter,
 } from './media-rows'
 
+const used = { missing: false, noteCount: 1, usedElsewhere: false }
 const rows = buildMediaRows([
-  { name: 'flag-10.png', size: 300 },
-  { name: 'chime-france.wav', size: 2000 },
-  { name: 'Café.mp3', size: null },
-  { name: 'flag-9.png', size: 200 },
-  { name: '_shuffle.js', size: 50 },
-  { name: 'clip.webm', size: 9000 },
-  { name: '_Kanji.TTF', size: 400 },
+  { name: 'flag-10.png', size: 300, ...used },
+  { name: 'chime-france.wav', size: 2000, ...used },
+  { name: 'Café.mp3', size: null, ...used },
+  { name: 'flag-9.png', size: 200, ...used },
+  { name: '_shuffle.js', size: 50, ...used, noteCount: 0, usedElsewhere: true },
+  { name: 'clip.webm', size: 9000, ...used },
+  { name: '_Kanji.TTF', size: 400, ...used },
 ])
 
 describe('media rows', () => {
@@ -43,6 +48,22 @@ describe('media rows', () => {
     expect(names('image', 'wav')).toEqual([])
     expect(names('all', '  ')).toHaveLength(7)
     expect(names('font')).toEqual(['_Kanji.TTF'])
+  })
+
+  it('sorts files into used, unused and missing', () => {
+    const files = buildMediaRows([
+      { name: 'a.png', size: 1, missing: false, noteCount: 2, usedElsewhere: false },
+      { name: '_b.css', size: 1, missing: false, noteCount: 0, usedElsewhere: true },
+      { name: 'c.png', size: 1, missing: false, noteCount: 0, usedElsewhere: false },
+      { name: 'd.png', size: null, missing: true, noteCount: 1, usedElsewhere: false },
+    ])
+    expect(countUsage(files)).toEqual({ used: 2, unused: 1, missing: 1 })
+    const names = (usage: UsageFilter) => files.filter((row) => matchesUsage(row, usage)).map((row) => row.name)
+    expect(names('any')).toEqual(['_b.css', 'a.png', 'c.png'])
+    expect(names('used')).toEqual(['_b.css', 'a.png'])
+    expect(names('unused')).toEqual(['c.png'])
+    expect(names('missing')).toEqual(['d.png'])
+    expect(['any', 'missing', 'all', ''].map(isUsageFilter)).toEqual([true, true, false, false])
   })
 
   it('checks kind filter values, labels extensions and encodes preview routes', () => {

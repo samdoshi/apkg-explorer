@@ -14,9 +14,11 @@ test('the media list filters, sorts and previews files, which download and close
 
   await expect(page).toHaveURL(/#\/media$/)
   const status = page.getByRole('status')
-  await expect(status).toHaveText(/^19 files · \d+ KB$/)
+  await expect(status).toHaveText(/^20 files · \d+ KB$/)
   const kinds = page.getByRole('radiogroup', { name: 'Kind' })
-  await expect(kinds.getByRole('radio')).toHaveText(['All 19', 'Images 9', 'Audio 6', 'Video 1', 'Fonts 1', 'Other 2'])
+  await expect(kinds.getByRole('radio')).toHaveText(['All 20', 'Images 10', 'Audio 6', 'Video 1', 'Fonts 1', 'Other 2'])
+  const usage = page.getByRole('radiogroup', { name: 'Usage' })
+  await expect(usage.getByRole('radio')).toHaveText(['Used 19', 'Unused 1', 'Missing 1'])
   const table = page.getByRole('table', { name: 'Media files' })
   const rows = table.getByRole('row')
   await expect(rows.nth(1)).toContainText('_country.css')
@@ -24,16 +26,17 @@ test('the media list filters, sorts and previews files, which download and close
 
   // Images only, smallest first.
   await kinds.getByRole('radio', { name: /^Images/ }).click()
-  await expect(status).toHaveText(/^Showing 9 files of 19 · /)
+  await expect(status).toHaveText(/^Showing 10 files of 20 · /)
   await table.getByRole('button', { name: 'Size' }).click()
   await expect(rows.nth(1)).toContainText('flag-germany.png')
 
   await rows.nth(1).click()
   await expect(page).toHaveURL(/#\/media\/flag-germany\.png$/)
   let dialog = page.getByRole('dialog', { name: 'flag-germany.png' })
-  await expect(dialog.getByText('Image · PNG · 215 B · File 1 of 9')).toBeVisible()
+  await expect(dialog.getByText('Image · PNG · 215 B · File 1 of 10')).toBeVisible()
   await expect(dialog.getByRole('img', { name: 'flag-germany.png' })).not.toHaveJSProperty('naturalWidth', 0)
   await expect(dialog.getByText('150 × 100 pixels')).toBeVisible()
+  await expect(dialog.getByRole('region', { name: 'Used by' }).getByRole('link')).toHaveText(['Germany'])
   await saveScreen(dialog, 'media-preview')
 
   const download = page.waitForEvent('download')
@@ -112,9 +115,38 @@ test('the media list filters, sorts and previews files, which download and close
   // The font is only on the page while it's previewed.
   await expect.poll(() => table.evaluate(previewFonts)).toEqual([])
 
+  // Usage: the file nothing refers to, and the one a note refers to that the package lacks.
+  await kinds.getByRole('radio', { name: /^All/ }).click()
+  await usage.getByRole('radio', { name: /^Unused/ }).click()
+  await expect(kinds.getByRole('radio')).toHaveText(['All 1', 'Images 1'])
+  await expect(rows).toHaveCount(2)
+  await expect(rows.nth(1)).toContainText('old-diagram.png')
+  await rows.nth(1).click()
+  dialog = page.getByRole('dialog', { name: 'old-diagram.png' })
+  await expect(dialog.getByRole('region', { name: 'Used by' })).toHaveText(
+    'Used byNothing in this package refers to this file.',
+  )
+  await page.keyboard.press('Escape')
+  await usage.getByRole('radio', { name: /^Missing/ }).click()
+  await expect(status).toHaveText('1 missing file')
+  await expect(rows.nth(1)).toContainText('missing-picture.png')
+  await expect(rows.nth(1).getByRole('cell').nth(2)).toHaveText('Missing')
+  await saveScreen(page, 'media-missing')
+  await rows.nth(1).click()
+  dialog = page.getByRole('dialog', { name: 'missing-picture.png' })
+  await expect(dialog.getByText(/^The package doesn’t include this file/)).toBeVisible()
+  // The note opens over its table; Back comes back to the preview.
+  const noteTitle = "This card refers to a file that isn't in the package."
+  await dialog.getByRole('link', { name: noteTitle }).click()
+  await expect(page.getByRole('dialog', { name: noteTitle })).toBeVisible()
+  await page.goBack()
+  await expect(dialog).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+
   await search.fill('no such file')
   await expect(page.getByText('No files match the search and filter.')).toBeVisible()
   await page.getByRole('button', { name: 'Clear search and filter' }).click()
-  await expect(status).toHaveText(/^19 files/)
+  await expect(status).toHaveText(/^20 files/)
   await expectOnlyApprovedStorage(page)
 })

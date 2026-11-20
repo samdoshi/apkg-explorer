@@ -8,6 +8,7 @@ import { ListPopup } from '@/features/app-shell/list-popup'
 import { useListPopup } from '@/features/app-shell/use-list-popup'
 import { canPlay } from '@/features/card-viewer/can-play'
 import { mimeTypeFor } from '@/features/package/mime'
+import type { NoteTypeSummary } from '@/features/package/package'
 import type { PackageClient } from '@/features/package/package-client'
 import { usePackage } from '@/features/package/package-context'
 import { formatBytes } from '@/lib/format'
@@ -16,6 +17,7 @@ import { kindInfo } from './kinds'
 import type { MediaPreviewContext } from './media-preview-context'
 import { extensionLabel, mediaPath, type MediaRow } from './media-rows'
 import { useMediaFile } from './use-media-file'
+import { UsedBy } from './used-by'
 
 /** #/media/:name, shown over the media list. */
 export function MediaPreview() {
@@ -47,8 +49,15 @@ export function MediaPreview() {
         context.onClosed(name)
       }}
     >
-      {file ? (
-        <PreviewBody key={name} client={state.client} file={file} />
+      {file?.missing ? (
+        <>
+          <Message>
+            The package doesn’t include this file, though the notes, card templates or styling below refer to it.
+          </Message>
+          <UsedBy client={state.client} file={file} noteTypes={state.summary.noteTypes} />
+        </>
+      ) : file ? (
+        <PreviewBody key={name} client={state.client} file={file} noteTypes={state.summary.noteTypes} />
       ) : (
         <Message>This file isn’t in the open package’s media list.</Message>
       )}
@@ -56,7 +65,13 @@ export function MediaPreview() {
   )
 }
 
-function PreviewBody({ client, file }: { client: PackageClient; file: MediaRow }) {
+interface PreviewBodyProps {
+  client: PackageClient
+  file: MediaRow
+  noteTypes: readonly NoteTypeSummary[]
+}
+
+function PreviewBody({ client, file, noteTypes }: PreviewBodyProps) {
   const media = useMediaFile(client, file.name)
   // Set by the image viewer once the image has loaded.
   const [dimensions, setDimensions] = useState<string | null>(null)
@@ -98,6 +113,7 @@ function PreviewBody({ client, file }: { client: PackageClient; file: MediaRow }
           <p className="text-sm text-muted-foreground">There’s no preview for this kind of file.</p>
         )}
       </div>
+      <UsedBy client={client} file={file} noteTypes={noteTypes} />
       <footer className="flex items-center gap-3 border-t px-4 py-3">
         <p className="text-xs text-muted-foreground">{dimensions}</p>
         <Button asChild size="sm" className="ml-auto">

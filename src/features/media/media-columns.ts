@@ -18,4 +18,11 @@ export const mediaColumns: ColumnDef<MediaRow>[] = [
     sortingFn: 'basic',
     sortUndefined: 'last',
   },
+  {
+    id: 'use',
+    header: 'Used by',
+    // By number of notes; templates and styling alone come between unused files and one note.
+    accessorFn: (row) => row.noteCount * 2 + (row.usedElsewhere ? 1 : 0),
+    sortingFn: 'basic',
+  },
 ]

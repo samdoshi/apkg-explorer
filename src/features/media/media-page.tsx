@@ -4,6 +4,7 @@ import { useCallback, useDeferredValue, useMemo, useRef, useState, type ReactNod
 import { Outlet, useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Separator } from '@/components/ui/separator'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { LoadingStatus } from '@/features/app-shell/loading-status'
 import type { PackageClient } from '@/features/package/package-client'
@@ -16,13 +17,17 @@ import type { MediaPreviewContext } from './media-preview-context'
 import {
   buildMediaRows,
   countKinds,
+  countUsage,
   filterMediaRows,
   isKindFilter,
+  isUsageFilter,
+  matchesUsage,
   MEDIA_KINDS,
   mediaPath,
   totalSize,
   type KindFilter,
   type MediaRow,
+  type UsageFilter,
 } from './media-rows'
 import { mediaColumns } from './media-columns'
 import { MediaTable, type MediaTableHandle } from './media-table'
@@ -55,11 +60,17 @@ function MediaLoader({ client, fileName }: { client: PackageClient; fileName: st
 function MediaBrowser({ rows }: { rows: MediaRow[] }) {
   const [query, setQuery] = useState('')
   const [kind, setKind] = useState<KindFilter>('all')
+  const [usage, setUsage] = useState<UsageFilter>('any')
   // The package's own order means nothing, so there's always a sort, starting with the name.
   const [sorting, setSorting] = useState<SortingState>([{ id: 'name', desc: false }])
   const deferredQuery = useDeferredValue(query)
-  const visibleRows = useMemo(() => filterMediaRows(rows, deferredQuery, kind), [rows, deferredQuery, kind])
-  const counts = useMemo(() => countKinds(rows), [rows])
+  // Rows are the package's files and then the missing ones; the usage filter picks between them.
+  const fileCount = useMemo(() => rows.filter((row) => !row.missing).length, [rows])
+  const usageCounts = useMemo(() => countUsage(rows), [rows])
+  const inUsage = useMemo(() => rows.filter((row) => matchesUsage(row, usage)), [rows, usage])
+  const visibleRows = useMemo(() => filterMediaRows(inUsage, deferredQuery, kind), [inUsage, deferredQuery, kind])
+  // The kind filter counts what the usage filter lets through.
+  const counts = useMemo(() => countKinds(inUsage), [inUsage])
   const rowsByName = useMemo(() => new Map(rows.map((row) => [row.name, row])), [rows])
   const navigate = useNavigate()
   const tableRef = useRef<MediaTableHandle>(null)
@@ -79,8 +90,10 @@ function MediaBrowser({ rows }: { rows: MediaRow[] }) {
   const clearAll = () => {
     setQuery('')
     setKind('all')
+    setUsage('any')
   }
-  const narrowed = visibleRows.length !== rows.length
+  const narrowed = usage !== 'any' || visibleRows.length !== fileCount
+  const showUsage = usageCounts.unused + usageCounts.missing > 0 || usage !== 'any'
 
   // The preview steps through files in the list's current order.
   const sortedRows = table.getRowModel().rows
@@ -103,6 +116,8 @@ function MediaBrowser({ rows }: { rows: MediaRow[] }) {
             variant="outline"
             size="sm"
             aria-label="Kind"
+            // Wraps on phones instead of making the page scroll sideways.
+            className="flex-wrap"
             value={kind}
             onValueChange={(value) => {
               // Clicking the chosen kind again would clear the choice; keep it instead.
@@ -110,12 +125,36 @@ function MediaBrowser({ rows }: { rows: MediaRow[] }) {
             }}
           >
             <ToggleGroupItem value="all">
-              All <span className="text-muted-foreground tabular-nums">{formatNumber(rows.length)}</span>
+              All <span className="text-muted-foreground tabular-nums">{formatNumber(inUsage.length)}</span>
             </ToggleGroupItem>
-            {MEDIA_KINDS.filter((item) => counts[item] > 0).map((item) => (
+            {MEDIA_KINDS.filter((item) => counts[item] > 0 || item === kind).map((item) => (
               <ToggleGroupItem key={item} value={item}>
                 {kindInfo[item].plural}{' '}
                 <span className="text-muted-foreground tabular-nums">{formatNumber(counts[item])}</span>
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        )}
+        {showUsage && (
+          // Phones wrap the two groups onto lines of their own.
+          <Separator orientation="vertical" className="hidden h-6 data-vertical:self-center sm:block" />
+        )}
+        {showUsage && (
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            size="sm"
+            aria-label="Usage"
+            className="flex-wrap"
+            // None chosen: every file in the package. Clicking the chosen one again clears it.
+            value={usage === 'any' ? '' : usage}
+            onValueChange={(value) => {
+              setUsage(isUsageFilter(value) ? value : 'any')
+            }}
+          >
+            {USAGE_CHOICES.filter(({ value }) => usageCounts[value] > 0 || value === usage).map(({ value, label, title }) => (
+              <ToggleGroupItem key={value} value={value} title={title}>
+                {label} <span className="text-muted-foreground tabular-nums">{formatNumber(usageCounts[value])}</span>
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
@@ -139,11 +178,13 @@ function MediaBrowser({ rows }: { rows: MediaRow[] }) {
       </Toolbar>
       <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2 text-sm">
         <p role="status" className="mr-1 text-muted-foreground">
-          {narrowed
-            ? `Showing ${formatCount(visibleRows.length, 'file')} of ${formatNumber(rows.length)}`
-            : formatCount(rows.length, 'file')}
-          {' · '}
-          {formatBytes(totalSize(visibleRows))}
+          {usage === 'missing'
+            ? formatCount(visibleRows.length, 'missing file')
+            : `${
+                narrowed
+                  ? `Showing ${formatCount(visibleRows.length, 'file')} of ${formatNumber(fileCount)}`
+                  : formatCount(fileCount, 'file')
+              } · ${formatBytes(totalSize(visibleRows))}`}
         </p>
         {narrowed && (
           <Button variant="ghost" size="xs" onClick={clearAll}>
@@ -156,6 +197,12 @@ function MediaBrowser({ rows }: { rows: MediaRow[] }) {
     </>
   )
 }
+
+const USAGE_CHOICES: { value: Exclude<UsageFilter, 'any'>; label: string; title: string }[] = [
+  { value: 'used', label: 'Used', title: 'Files that notes, card templates or styling refer to' },
+  { value: 'unused', label: 'Unused', title: 'Files nothing in the package refers to' },
+  { value: 'missing', label: 'Missing', title: 'Files that notes, templates or styling refer to, but the package lacks' },
+]
 
 function Toolbar({ children }: { children?: ReactNode }) {
   return (

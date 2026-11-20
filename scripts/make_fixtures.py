@@ -551,6 +551,23 @@ def japan_flag() -> bytes:
     return png(w, h, lambda x, y: (188, 0, 45) if math.hypot(x - w / 2, y - h / 2) < 30 else (255, 255, 255))
 
 
+def old_diagram() -> bytes:
+    """A bar chart no note uses any more: the sample deck's unused file."""
+    w, h = 160, 100
+    bars = [(20, 40), (60, 75), (100, 30)]  # (left edge, height)
+
+    def pixel(x: int, y: int) -> tuple[int, int, int]:
+        if x == 10 or y == h - 10:
+            return (60, 60, 60)  # axes
+        for left, top in bars:
+            if left <= x < left + 30 and h - 10 - top <= y < h - 10:
+                shade = (y * 7 + x * 3) % 40  # shaded bars
+                return (70 + shade, 120 + shade, 200)
+        return (255, 255, 255)
+
+    return png(w, h, pixel)
+
+
 def wav(notes: list[float], seconds_per_note: float = 0.25, rate: int = 16000) -> bytes:
     samples = bytearray()
     per_note = int(rate * seconds_per_note)
@@ -874,7 +891,9 @@ def sample_package() -> Package:
     nt_cloze, nt_country, nt_quiz = cloze(1_700_000_000_004), country(1_700_000_000_005), quiz(1_700_000_000_006)
     media: dict[str, bytes] = {"_globe.svg": GLOBE_SVG, "_waves.svg": WAVES_SVG, "water.svg": WATER_SVG,
                                "_shuffle.js": SHUFFLE_JS, "mandelbrot.webm": (MEDIA / "mandelbrot.webm").read_bytes(),
-                               "_pixel.ttf": pixel_font(), "_country.css": COUNTRY_STYLE}
+                               "_pixel.ttf": pixel_font(), "_country.css": COUNTRY_STYLE,
+                               # Left behind by a deleted note: the media browser lists it as unused.
+                               "old-diagram.png": old_diagram()}
     notes: list[Note] = []
 
     for i, (name, capital, flag, chime, tags, extra) in enumerate(COUNTRIES):

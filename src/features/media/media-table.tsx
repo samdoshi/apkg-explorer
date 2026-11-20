@@ -6,7 +6,7 @@ import { formatBytes, formatNumber } from '@/lib/format'
 import { useVirtualRows } from '@/lib/use-virtual-rows'
 import { cn } from '@/lib/utils'
 import { kindInfo } from './kinds'
-import type { MediaRow } from './media-rows'
+import { isUsed, usageLabel, type MediaRow } from './media-rows'
 
 const ROW_HEIGHT = 40
 const HEADER_HEIGHT = 41
@@ -16,6 +16,7 @@ const columnClass: Record<string, string> = {
   name: '',
   kind: 'hidden w-28 sm:table-cell',
   size: 'w-24 text-right sm:w-28',
+  use: 'w-28 sm:w-40',
 }
 
 export interface MediaTableHandle {
@@ -83,6 +84,7 @@ export function MediaTable({ ref, table, totalCount, onClearAll, onOpen }: Media
             if (!row) return null
             const file = row.original
             const { label, icon: Icon } = kindInfo[file.kind]
+            const usage = usageLabel(file)
             return (
               <tr
                 key={row.id}
@@ -111,10 +113,12 @@ export function MediaTable({ ref, table, totalCount, onClearAll, onOpen }: Media
                   {label}
                 </td>
                 <td
-                  title={file.size === null ? undefined : `${formatNumber(file.size)} bytes`}
+                  title={file.missing ? 'Not in the package' : file.size === null ? undefined : `${formatNumber(file.size)} bytes`}
                   className={cn('border-b px-3 tabular-nums group-hover:bg-muted/60', columnClass.size)}
                 >
-                  {file.size === null ? (
+                  {file.missing ? (
+                    <span className="text-destructive">Missing</span>
+                  ) : file.size === null ? (
                     <>
                       <span aria-hidden="true">—</span>
                       <span className="sr-only">Unknown</span>
@@ -122,6 +126,16 @@ export function MediaTable({ ref, table, totalCount, onClearAll, onOpen }: Media
                   ) : (
                     formatBytes(file.size)
                   )}
+                </td>
+                <td
+                  title={usage.long}
+                  className={cn(
+                    'max-w-0 border-b px-3 group-hover:bg-muted/60',
+                    columnClass.use,
+                    !isUsed(file) && 'text-muted-foreground',
+                  )}
+                >
+                  <span className="block truncate">{usage.short}</span>
                 </td>
               </tr>
             )

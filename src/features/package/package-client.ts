@@ -1,7 +1,7 @@
 import type { NoteTypeInfo } from './collection'
 import { PackageError } from './errors'
 import { MediaCache } from './media-cache'
-import type { MediaListItem } from './media-map'
+import type { MediaListItem, MediaUse } from './media-usage'
 import type { NoteDetail } from './note-detail'
 import type { NoteRow } from './note-row'
 import type { PackageSummary } from './package'
@@ -79,8 +79,14 @@ export class PackageClient {
     return noteType
   }
 
+  /** The media files with how much each is used (worked out in the worker the first time). */
   getMediaList(): Promise<MediaListItem[]> {
     return this.call('getMediaList')
+  }
+
+  /** Where one file from getMediaList() is used. */
+  getMediaUse(name: string): Promise<MediaUse> {
+    return this.call('getMediaUse', name)
   }
 
   readMedia(name: string): Promise<Blob | null> {

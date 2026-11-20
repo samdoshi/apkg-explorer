@@ -1,5 +1,5 @@
 import { mediaKindFor } from '@/features/package/mime'
-import { classifyUrl, rewriteCssUrls } from './urls'
+import { classifyUrl, rewriteCssUrls } from '@/features/package/urls'
 
 /*
  * Cleans card HTML and CSS before it goes into the card frame. The frame's sandbox and

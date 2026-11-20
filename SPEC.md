@@ -223,6 +223,20 @@ _As built (step 5):_
   file itself (its `name`, `cmap`, `post` and `fvar` tables); WOFF2 files are decompressed with
   the `brotli` package, loaded only for them. The font is added to the page only while the
   preview shows it._
+- _Added: media usage. A "Used by" column says how many notes' fields refer to each file, or
+  "Templates" when only card templates or styling (or a package stylesheet they import) do, or
+  "Unused". A Used / Unused / Missing filter (shown when anything is unused or missing; click
+  the chosen one again to clear it) picks files; Missing lists names that notes, templates or
+  styling refer to but the package lacks, with "Missing" in the Size column. The kind filter
+  counts what the usage filter lets through. The preview has a "Used by" section: links to the
+  notes (each opens the note popup over its table; Back comes back) and the templates, styling
+  and stylesheets that use the file. References are found in the worker, without a DOM, where
+  the card viewer loads files from: URL attributes, srcset, url() and @import in styles, and
+  `[sound:…]`, following package stylesheets' imports. Names that scripts put together in code
+  can't be found; the preview of an unused file whose name starts with `_` says that Anki keeps
+  such files anyway._
+- _The kind and usage filters wrap on phones (before, the kind filter made the page scroll
+  sideways)._
 
 ## 5. Layout, theme, accessibility
 
@@ -281,7 +295,8 @@ _As built (step 5):_
   TrueType pixel font drawn by the script (Latin capitals, digits and private use icons, one in
   plane 15, with glyph names) that the Country note type's styling loads through an `@import`ed
   stylesheet, a card
-  with a `<script>`, a card referencing a web image and one referencing a missing file. The
+  with a `<script>`, a card referencing a web image and one referencing a missing file, and an
+  image no note uses (`old-diagram.png`). The
   `.colpkg` and `legacy-anki21.apkg` each have cards in a filtered deck. Output
   is deterministic. `fixtures/sample.apkg` is also the in-app sample deck. Vitest also runs
   against any files in `fixtures/real/`. _Changed from the Node script first planned: Python's

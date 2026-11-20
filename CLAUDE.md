@@ -38,7 +38,9 @@ src/features/<name>/    code grouped by feature:
   open-file/            start screen, file picker, window-wide drag and drop, sample deck
   package/              .apkg reader (zip, zstd, protobuf, media map, schema 11/18), the Web
                         Worker that runs it, PackageClient (main-thread RPC) and React context;
-                        usePackageData() loads anything from the worker into a component
+                        usePackageData() loads anything from the worker into a component.
+                        urls.ts = what a URL in card HTML/CSS points at; media-references.ts finds
+                        file references without a DOM, media-usage.ts indexes them (media usage)
   notes-table/          #/notes/:noteTypeId: TanStack Table (sorting only) + TanStack Virtual
                         rows. Search and column filters are plain functions in filters.ts,
                         applied before the table sorts. Rows come from the worker
@@ -47,7 +49,7 @@ src/features/<name>/    code grouped by feature:
   card-viewer/          #/notes/:noteTypeId/:noteId: the note popup, a child route of the table so
                         Back closes it. template.ts + cloze.ts + template-filters.ts = Anki's
                         template language; card-html.ts = reviewer extras (type answers, [sound:]);
-                        sanitize.ts + urls.ts = cleaning and script/web findings (listed by
+                        sanitize.ts (+ package/urls.ts) = cleaning and script/web findings (listed by
                         content-details.tsx, "View scripts" / "View remote URLs"); card-document.ts =
                         frame documents: every frame has allow-scripts and an opaque origin and
                         starts with a loader; blocked scripts are stopped by the CSP (only the
@@ -64,7 +66,8 @@ src/features/<name>/    code grouped by feature:
                         media-table.tsx) and #/media/:name, the preview dialog (a child route,
                         name URI-encoded; files come through package/media-cache.ts).
                         font-file.ts reads fonts (names, cmap, post, fvar; TTF/OTF/TTC/WOFF/
-                        WOFF2), font-view.tsx is the font preview, font-samples.ts its text
+                        WOFF2), font-view.tsx is the font preview, font-samples.ts its text.
+                        used-by.tsx = the preview's "Used by" (notes link to their popups)
 e2e/                    Playwright smoke tests; fixtures.ts has the guards, approved-storage.ts the
                         storage allow-list
 scripts/                Node scripts in TypeScript (run directly by Node 24); make_fixtures.py
