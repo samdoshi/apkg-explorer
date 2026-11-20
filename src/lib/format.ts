@@ -7,7 +7,7 @@ export function formatNumber(value: number): string {
 }
 
 export function formatCount(count: number, singular: string, pluralForm = `${singular}s`): string {
-  return `${numberFormat.format(count)} ${count === 1 ? singular : pluralForm}`
+  return `${formatNumber(count)} ${count === 1 ? singular : pluralForm}`
 }
 
 export function formatBytes(bytes: number): string {
@@ -21,6 +21,13 @@ export function formatBytes(bytes: number): string {
   }
   const digits = value < 10 ? 1 : 0
   return `${value.toFixed(digits)} ${units[unit] ?? 'TB'}`
+}
+
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
+
+/** Orders names as people expect: ignoring case and accents, "Lesson 2" before "Lesson 10". */
+export function compareText(a: string, b: string): number {
+  return collator.compare(a, b)
 }
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' })

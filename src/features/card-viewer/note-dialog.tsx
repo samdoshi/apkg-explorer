@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { useMemo, useState, type KeyboardEvent } from 'react'
+import { useCallback, useMemo, useState, type KeyboardEvent } from 'react'
 import { useLocation, useNavigate, useOutletContext, useParams } from 'react-router'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -7,11 +7,13 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Spinner } from '@/components/ui/spinner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { LoadingStatus, type LoadingState } from '@/features/app-shell/loading-status'
 import type { NoteTypeInfo } from '@/features/package/collection'
 import type { NoteDetail } from '@/features/package/note-detail'
 import type { PackageClient } from '@/features/package/package-client'
 import { usePackage } from '@/features/package/package-context'
-import { formatDate } from '@/lib/format'
+import { usePackageData } from '@/features/package/use-package-data'
+import { formatDate, formatNumber } from '@/lib/format'
 import { isOpenedFromList, openedFromList } from '@/lib/opened-from-list'
 import { usePrefersDark } from '@/lib/use-prefers-dark'
 import { canPlay } from './can-play'
@@ -25,7 +27,6 @@ import { prepareCards, prepareNote, type CardView } from './prepare'
 import { describeCard } from './scheduling'
 import { useContentScan } from './use-content-scan'
 import { useFrames } from './use-frames'
-import { useNoteDetail } from './use-note-detail'
 
 /** #/notes/:noteTypeId/:noteId, shown over the notes table. */
 export function NoteDialog() {
@@ -95,7 +96,7 @@ export function NoteDialog() {
             </DialogTitle>
             <DialogDescription className="truncate text-xs">
               {noteType.name}
-              {index >= 0 && ` · Note ${(index + 1).toLocaleString('en')} of ${orderedIds.length.toLocaleString('en')}`}
+              {index >= 0 && ` · Note ${formatNumber(index + 1)} of ${formatNumber(orderedIds.length)}`}
             </DialogDescription>
           </div>
           <Button
@@ -151,25 +152,18 @@ interface NoteBodyProps {
 }
 
 function NoteBody(props: NoteBodyProps) {
-  const detail = useNoteDetail(props.client, props.noteId, props.noteTypeId)
-  if (detail.status === 'ready') return <NoteTabs {...props} note={detail.note} noteType={detail.noteType} />
-  return (
-    <div className="flex flex-1 items-start justify-center p-8">
-      {detail.status === 'loading' ? (
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Spinner aria-hidden="true" role="presentation" />
-          Loading note…
-        </p>
-      ) : (
-        <Alert variant="destructive" className="max-w-lg">
-          <AlertTitle>Couldn’t show this note</AlertTitle>
-          <AlertDescription>
-            {detail.status === 'missing' ? 'This note isn’t in the open file.' : detail.message}
-          </AlertDescription>
-        </Alert>
-      )}
-    </div>
+  const { client, noteId, noteTypeId } = props
+  // Null when the file has no such note (of this note type).
+  const detail = usePackageData(
+    useCallback(async () => {
+      const [note, noteType] = await Promise.all([client.getNote(noteId), client.getNoteType(noteTypeId)])
+      return note && noteType && note.noteTypeId === noteTypeId ? { note, noteType } : null
+    }, [client, noteId, noteTypeId]),
   )
+  if (detail.status === 'ready' && detail.data) return <NoteTabs {...props} {...detail.data} />
+  const state: LoadingState =
+    detail.status === 'ready' ? { status: 'failed', message: 'This note isn’t in the open file.' } : detail
+  return <LoadingStatus state={state} loading="Loading note…" failed="Couldn’t show this note" />
 }
 
 function NoteTabs({

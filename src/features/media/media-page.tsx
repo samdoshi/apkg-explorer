@@ -1,19 +1,20 @@
 import { getCoreRowModel, getSortedRowModel, useReactTable, type SortingState } from '@tanstack/react-table'
 import { Search } from 'lucide-react'
-import { useDeferredValue, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useDeferredValue, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Outlet, useNavigate } from 'react-router'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Spinner } from '@/components/ui/spinner'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { LoadingStatus } from '@/features/app-shell/loading-status'
 import type { PackageClient } from '@/features/package/package-client'
 import { usePackage } from '@/features/package/package-context'
-import { formatBytes, formatCount } from '@/lib/format'
+import { usePackageData } from '@/features/package/use-package-data'
+import { formatBytes, formatCount, formatNumber } from '@/lib/format'
 import { openedFromList } from '@/lib/opened-from-list'
 import { kindInfo } from './kinds'
 import type { MediaPreviewContext } from './media-preview-context'
 import {
+  buildMediaRows,
   countKinds,
   filterMediaRows,
   isKindFilter,
@@ -25,7 +26,6 @@ import {
 } from './media-rows'
 import { mediaColumns } from './media-columns'
 import { MediaTable, type MediaTableHandle } from './media-table'
-import { useMediaList } from './use-media-list'
 
 /** #/media */
 export function MediaPage() {
@@ -36,28 +36,16 @@ export function MediaPage() {
 }
 
 function MediaLoader({ client, fileName }: { client: PackageClient; fileName: string }) {
-  const loaded = useMediaList(client)
+  const loaded = usePackageData(useCallback(async () => buildMediaRows(await client.getMediaList()), [client]))
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <title>{`Media · ${fileName} · APKG Explorer`}</title>
       {loaded.status === 'ready' ? (
-        <MediaBrowser rows={loaded.rows} />
+        <MediaBrowser rows={loaded.data} />
       ) : (
         <>
           <Toolbar />
-          <div className="flex flex-1 items-start justify-center p-8">
-            {loaded.status === 'loading' ? (
-              <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Spinner aria-hidden="true" role="presentation" />
-                Loading media…
-              </p>
-            ) : (
-              <Alert variant="destructive" className="max-w-lg">
-                <AlertTitle>Couldn’t load the media list</AlertTitle>
-                <AlertDescription>{loaded.message}</AlertDescription>
-              </Alert>
-            )}
-          </div>
+          <LoadingStatus state={loaded} loading="Loading media…" failed="Couldn’t load the media list" />
         </>
       )}
     </div>
@@ -122,12 +110,12 @@ function MediaBrowser({ rows }: { rows: MediaRow[] }) {
             }}
           >
             <ToggleGroupItem value="all">
-              All <span className="text-muted-foreground tabular-nums">{rows.length.toLocaleString('en')}</span>
+              All <span className="text-muted-foreground tabular-nums">{formatNumber(rows.length)}</span>
             </ToggleGroupItem>
             {MEDIA_KINDS.filter((item) => counts[item] > 0).map((item) => (
               <ToggleGroupItem key={item} value={item}>
                 {kindInfo[item].plural}{' '}
-                <span className="text-muted-foreground tabular-nums">{counts[item].toLocaleString('en')}</span>
+                <span className="text-muted-foreground tabular-nums">{formatNumber(counts[item])}</span>
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
@@ -152,7 +140,7 @@ function MediaBrowser({ rows }: { rows: MediaRow[] }) {
       <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2 text-sm">
         <p role="status" className="mr-1 text-muted-foreground">
           {narrowed
-            ? `Showing ${formatCount(visibleRows.length, 'file')} of ${rows.length.toLocaleString('en')}`
+            ? `Showing ${formatCount(visibleRows.length, 'file')} of ${formatNumber(rows.length)}`
             : formatCount(rows.length, 'file')}
           {' · '}
           {formatBytes(totalSize(visibleRows))}

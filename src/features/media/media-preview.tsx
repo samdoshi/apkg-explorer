@@ -9,7 +9,7 @@ import { canPlay } from '@/features/card-viewer/can-play'
 import { mimeTypeFor } from '@/features/package/mime'
 import type { PackageClient } from '@/features/package/package-client'
 import { usePackage } from '@/features/package/package-context'
-import { formatBytes } from '@/lib/format'
+import { formatBytes, formatNumber } from '@/lib/format'
 import { isOpenedFromList, openedFromList } from '@/lib/opened-from-list'
 import { FontView } from './font-view'
 import { kindInfo } from './kinds'
@@ -51,7 +51,7 @@ export function MediaPreview() {
 
   const details = file && [kindInfo[file.kind].label, extensionLabel(file.name), file.size === null ? null : formatBytes(file.size)]
   const position =
-    index >= 0 ? `File ${(index + 1).toLocaleString('en')} of ${orderedNames.length.toLocaleString('en')}` : null
+    index >= 0 ? `File ${formatNumber(index + 1)} of ${formatNumber(orderedNames.length)}` : null
 
   return (
     <Dialog

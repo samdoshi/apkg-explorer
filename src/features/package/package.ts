@@ -20,6 +20,7 @@ import type { NoteRow } from './note-row'
 import { ProtoMessage } from './protobuf'
 import { readZipEntries, readZipEntry } from './zip'
 import { hasZstdMagic, zstdToBlob, zstdToBytes } from './zstd'
+import { compareText } from '@/lib/format'
 import { normalizeForSearch } from '@/lib/search'
 
 export type PackageFormat = 'anki2' | 'anki21' | 'anki21b'
@@ -69,8 +70,6 @@ const COLLECTION_FILES: readonly (readonly [string, PackageFormat])[] = [
 
 /** PackageMetadata.Version.VERSION_LATEST, the newest version we understand. */
 const LATEST_PACKAGE_VERSION = 3
-
-const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
 
 export class AnkiPackage {
   private readonly file: Blob
@@ -168,14 +167,14 @@ export class AnkiPackage {
           noteCount: notesByType.get(noteType.id) ?? 0,
           cardCount: cardsByType.get(noteType.id) ?? 0,
         }))
-        .sort((a, b) => collator.compare(a.name, b.name)),
+        .sort((a, b) => compareText(a.name, b.name)),
       decks: this.decks
         .map((deck) => ({
           ...deck,
           cardCount: (deck.filtered ? cardsInFilteredDecks : cardsByHomeDeck).get(deck.id) ?? 0,
         }))
         .filter((deck) => deck.cardCount > 0)
-        .sort((a, b) => collator.compare(a.name, b.name)),
+        .sort((a, b) => compareText(a.name, b.name)),
     }
   }
 

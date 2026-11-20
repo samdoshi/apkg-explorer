@@ -1,5 +1,6 @@
 import type { MediaListItem } from '@/features/package/media-map'
 import { mediaKindFor, type MediaKind } from '@/features/package/mime'
+import { compareText } from '@/lib/format'
 import { normalizeForSearch, searchWords } from '@/lib/search'
 
 /** One media file as the media list shows it. */
@@ -21,12 +22,6 @@ export function isKindFilter(value: string): value is KindFilter {
   return value === 'all' || (MEDIA_KINDS as readonly string[]).includes(value)
 }
 
-const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
-
-export function compareNames(a: string, b: string): number {
-  return collator.compare(a, b)
-}
-
 /** Rows in name order (the package's own order is just the order the files were added). */
 export function buildMediaRows(files: readonly MediaListItem[]): MediaRow[] {
   return files
@@ -36,7 +31,7 @@ export function buildMediaRows(files: readonly MediaListItem[]): MediaRow[] {
       size: file.size,
       search: normalizeForSearch(file.name),
     }))
-    .sort((a, b) => compareNames(a.name, b.name))
+    .sort((a, b) => compareText(a.name, b.name))
 }
 
 /** Rows of the chosen kind whose names contain every word of the query. */

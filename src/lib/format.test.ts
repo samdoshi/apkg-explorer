@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatBytes, formatCount, formatNumber } from './format'
+import { compareText, formatBytes, formatCount, formatNumber } from './format'
 
 describe('formatCount', () => {
   it('pluralises and groups digits', () => {
@@ -21,5 +21,12 @@ describe('formatBytes', () => {
     expect(formatBytes(187_140)).toBe('183 KB')
     expect(formatBytes(5 * 1024 * 1024)).toBe('5.0 MB')
     expect(formatBytes(3.5 * 1024 ** 3)).toBe('3.5 GB')
+  })
+})
+
+describe('compareText', () => {
+  it('sorts numbers by value, ignoring case and accents', () => {
+    expect(['Lesson 10', 'lesson 2', 'Lesson 1'].sort(compareText)).toEqual(['Lesson 1', 'lesson 2', 'Lesson 10'])
+    expect(compareText('Éclair', 'eclair')).toBe(0)
   })
 })

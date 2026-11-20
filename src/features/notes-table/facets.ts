@@ -1,12 +1,11 @@
 import type { NoteRow } from '@/features/package/note-row'
+import { compareText } from '@/lib/format'
 import type { Facet, Facets } from './column-filter'
-
-const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
 
 function toFacets(counts: Map<string, number>): Facet[] {
   return [...counts]
     .map(([value, count]) => ({ value, count }))
-    .sort((a, b) => collator.compare(a.value, b.value))
+    .sort((a, b) => compareText(a.value, b.value))
 }
 
 /** Every tag and deck used by these notes, with how many notes use each. */

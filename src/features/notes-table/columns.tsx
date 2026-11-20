@@ -1,6 +1,6 @@
 import type { ColumnDef, SortingFn } from '@tanstack/react-table'
 import type { NoteRow } from '@/features/package/note-row'
-import { formatDate, formatNumber } from '@/lib/format'
+import { compareText, formatDate, formatNumber } from '@/lib/format'
 import { FieldCell } from './field-cell'
 import { fieldColumnId, fieldValue, type ColumnId } from './filters'
 
@@ -12,10 +12,8 @@ export interface ColumnInfo {
   kind: ColumnKind
 }
 
-const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
-
 const textSort: SortingFn<NoteRow> = (a, b, columnId) =>
-  collator.compare(a.getValue<string>(columnId), b.getValue<string>(columnId))
+  compareText(a.getValue<string>(columnId), b.getValue<string>(columnId))
 
 /** Text used for a cell's tooltip, so truncated content can still be read. */
 export function cellTitle(row: NoteRow, info: ColumnInfo, fieldIndex: number | null): string {

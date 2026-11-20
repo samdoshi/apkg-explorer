@@ -26,14 +26,17 @@ src/routes.tsx          every route (hash router). Pages that need an open file 
 src/main.tsx            entry
 src/index.css           Tailwind + shadcn theme (dark mode = prefers-color-scheme)
 src/components/ui/      shadcn components (generated; add with the CLI, below)
-src/lib/                shared helpers, incl. use-virtual-rows.ts (virtual rows + keyboard focus for
-                        both tables) and opened-from-list.ts (popups opened from a list close with Back)
+src/lib/                shared helpers: format.ts (numbers, sizes, dates, name order),
+                        use-virtual-rows.ts (virtual rows + keyboard focus for both tables) and
+                        opened-from-list.ts (popups opened from a list close with Back)
 src/features/<name>/    code grouped by feature:
   app-shell/            layout, header, drop overlay, RequirePackage route guard,
-                        route-error.tsx (errorElements: a page or popup that fails while drawing)
+                        route-error.tsx (errorElements: a page or popup that fails while drawing),
+                        loading-status.tsx (spinner / failure message while data loads)
   open-file/            start screen, file picker, window-wide drag and drop, sample deck
   package/              .apkg reader (zip, zstd, protobuf, media map, schema 11/18), the Web
-                        Worker that runs it, PackageClient (main-thread RPC) and React context
+                        Worker that runs it, PackageClient (main-thread RPC) and React context;
+                        usePackageData() loads anything from the worker into a component
   notes-table/          #/notes/:noteTypeId: TanStack Table (sorting only) + TanStack Virtual
                         rows. Search and column filters are plain functions in filters.ts,
                         applied before the table sorts. Rows come from the worker

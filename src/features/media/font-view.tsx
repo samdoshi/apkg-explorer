@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
-import { formatCount } from '@/lib/format'
+import { formatCount, formatNumber } from '@/lib/format'
 import {
   codePointLabel,
   hasCharacter,
@@ -131,7 +131,7 @@ function SampleText({
 }) {
   const missing = coverage?.missing ?? []
   const listed = missing.slice(0, SHOWN_MISSING).join(' ')
-  const more = missing.length > SHOWN_MISSING ? ` and ${(missing.length - SHOWN_MISSING).toLocaleString('en')} more` : ''
+  const more = missing.length > SHOWN_MISSING ? ` and ${formatNumber(missing.length - SHOWN_MISSING)} more` : ''
   return (
     <>
       <span className="text-xs text-muted-foreground">
@@ -171,7 +171,7 @@ function PrivateUse({ characters, style }: { characters: PrivateUseCharacter[]; 
       <div className="flex flex-col gap-1">
         <h3 id={headingId} className="text-sm font-medium">
           Private use characters{' '}
-          <span className="font-normal text-muted-foreground tabular-nums">{characters.length.toLocaleString('en')}</span>
+          <span className="font-normal text-muted-foreground tabular-nums">{formatNumber(characters.length)}</span>
         </h3>
         <p className="text-xs text-muted-foreground">
           Code points with no standard meaning, where fonts keep icons and extra glyphs. A card shows one with the
@@ -205,7 +205,7 @@ function PrivateUse({ characters, style }: { characters: PrivateUseCharacter[]; 
             setLimit(limit + PRIVATE_USE_STEP)
           }}
         >
-          Show {Math.min(remaining, PRIVATE_USE_STEP).toLocaleString('en')} more
+          Show {formatNumber(Math.min(remaining, PRIVATE_USE_STEP))} more
         </Button>
       )}
     </section>
@@ -237,8 +237,8 @@ function FontDetails({ info }: { info: FontInfo }) {
     ['Style', info.style ?? 'Not given'],
     ['Version', info.version ?? 'Not given'],
     ['Format', formatLabel(info)],
-    ['Glyphs', info.glyphCount === null ? 'Not given' : info.glyphCount.toLocaleString('en')],
-    ['Characters', info.codePoints.length.toLocaleString('en')],
+    ['Glyphs', info.glyphCount === null ? 'Not given' : formatNumber(info.glyphCount)],
+    ['Characters', formatNumber(info.codePoints.length)],
   ]
   if (info.axes.length > 0) {
     const axes = info.axes.map((axis) => `${axis.name} ${String(axis.min)}–${String(axis.max)}`)

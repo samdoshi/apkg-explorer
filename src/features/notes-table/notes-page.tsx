@@ -5,9 +5,8 @@ import {
   type SortingState,
 } from '@tanstack/react-table'
 import { Search, X } from 'lucide-react'
-import { useDeferredValue, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useDeferredValue, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Navigate, Outlet, useNavigate, useParams } from 'react-router'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -17,13 +16,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Spinner } from '@/components/ui/spinner'
+import { LoadingStatus } from '@/features/app-shell/loading-status'
 import type { NoteDialogContext } from '@/features/card-viewer/note-dialog-context'
 import type { NoteRow } from '@/features/package/note-row'
 import type { NoteTypeSummary, PackageSummary } from '@/features/package/package'
 import type { PackageClient } from '@/features/package/package-client'
 import { usePackage } from '@/features/package/package-context'
-import { formatCount } from '@/lib/format'
+import { usePackageData } from '@/features/package/use-package-data'
+import { formatCount, formatNumber } from '@/lib/format'
 import { openedFromList } from '@/lib/opened-from-list'
 import { buildColumns } from './columns'
 import { computeFacets } from './facets'
@@ -37,7 +37,6 @@ import {
 } from './filters'
 import { browsableNoteTypes, defaultNoteType } from './note-types'
 import { NotesTable, type NotesTableHandle } from './notes-table'
-import { useNoteRows } from './use-note-rows'
 
 /** #/notes: go to the note type with the most notes. */
 export function NotesIndex() {
@@ -77,28 +76,16 @@ function NotesLoader({
   summary: PackageSummary
   noteType: NoteTypeSummary
 }) {
-  const loaded = useNoteRows(client, noteType.id)
+  const loaded = usePackageData(useCallback(() => client.getNotes(noteType.id), [client, noteType.id]))
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <title>{`${noteType.name} · ${summary.fileName} · APKG Explorer`}</title>
       {loaded.status === 'ready' ? (
-        <NotesBrowser rows={loaded.rows} summary={summary} noteType={noteType} />
+        <NotesBrowser rows={loaded.data} summary={summary} noteType={noteType} />
       ) : (
         <>
           <Toolbar summary={summary} noteType={noteType} />
-          <div className="flex flex-1 items-start justify-center p-8">
-            {loaded.status === 'loading' ? (
-              <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Spinner aria-hidden="true" role="presentation" />
-                Loading notes…
-              </p>
-            ) : (
-              <Alert variant="destructive" className="max-w-lg">
-                <AlertTitle>Couldn’t load the notes</AlertTitle>
-                <AlertDescription>{loaded.message}</AlertDescription>
-              </Alert>
-            )}
-          </div>
+          <LoadingStatus state={loaded} loading="Loading notes…" failed="Couldn’t load the notes" />
         </>
       )}
     </div>
@@ -192,7 +179,7 @@ function NotesBrowser({
       <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2 text-sm">
         <p role="status" className="mr-1 text-muted-foreground">
           {narrowed
-            ? `Showing ${formatCount(visibleRows.length, 'note')} of ${rows.length.toLocaleString('en')}`
+            ? `Showing ${formatCount(visibleRows.length, 'note')} of ${formatNumber(rows.length)}`
             : formatCount(rows.length, 'note')}
         </p>
         {active.length > 0 && (

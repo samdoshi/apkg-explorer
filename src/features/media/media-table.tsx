@@ -2,7 +2,7 @@ import type { Header, Table } from '@tanstack/react-table'
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { useImperativeHandle, useRef, type Ref } from 'react'
 import { Button } from '@/components/ui/button'
-import { formatBytes } from '@/lib/format'
+import { formatBytes, formatNumber } from '@/lib/format'
 import { useVirtualRows } from '@/lib/use-virtual-rows'
 import { cn } from '@/lib/utils'
 import { kindInfo } from './kinds'
@@ -111,7 +111,7 @@ export function MediaTable({ ref, table, totalCount, onClearAll, onOpen }: Media
                   {label}
                 </td>
                 <td
-                  title={file.size === null ? undefined : `${file.size.toLocaleString('en')} bytes`}
+                  title={file.size === null ? undefined : `${formatNumber(file.size)} bytes`}
                   className={cn('border-b px-3 tabular-nums group-hover:bg-muted/60', columnClass.size)}
                 >
                   {file.size === null ? (
