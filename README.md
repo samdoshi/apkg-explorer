@@ -1,5 +1,7 @@
 # APKG Explorer
 
+**Use it here: [samdoshi.com/apkg-explorer](https://samdoshi.com/apkg-explorer/)**
+
 Look inside Anki decks in your browser. Open an `.apkg` or `.colpkg` file and browse its notes,
 see each card as Anki would show it, and check its media files.
 
