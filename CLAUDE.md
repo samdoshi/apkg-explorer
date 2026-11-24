@@ -1,6 +1,7 @@
 # APKG Explorer
 
-Browser-only viewer for Anki `.apkg` / `.colpkg` files. The spec is in `SPEC.md` (approved).
+Browser-only viewer for Anki `.apkg` / `.colpkg` files. Everything happens on the user's device:
+no server, nothing uploaded, nothing saved in the browser.
 Saved-data approvals live in AGENTS.md:
 
 @AGENTS.md
@@ -126,6 +127,10 @@ Data
   `useLiveQuery`), JSON export and import, `navigator.storage.persist()` after the first save.
 - The smoke tests fail if cookies, localStorage, sessionStorage, IndexedDB or Cache Storage
   hold anything not on the approved list.
+- Memory: only the collection database is loaded whole. Media is read on demand, one file at a
+  time (stored zip entries as slices of the `File`), and parsing and queries stay in the worker.
+- Card scripts and web content are blocked by default. Allowing them applies to the open file
+  only and is never saved.
 
 Checks
 - `npm run check` after every change; fix failures before reporting back. Never use `any`,
@@ -142,8 +147,8 @@ Checks
   `filter-tags.png` and `media-missing.png`) can mark an untouched screen as changed.
 
 Guardrails
-- npm with exact versions (`save-exact=true` in `.npmrc`). Ask before adding any dependency
-  that isn't on the approved list below.
+- npm with exact versions (`save-exact=true` in `.npmrc`). Everything in `package.json` is
+  approved; ask before adding any other dependency (notes on some of them below).
 - Group code by feature under `src/features/`.
 - Keep this file up to date when commands, layout, environment or rules change.
 - Commit after each feature passes both checks, then stop so the user can try it.

@@ -8,7 +8,7 @@ Uses only the Python standard library (sqlite3, zipfile, compression.zstd needs 
 The sample deck's video, scripts/media/mandelbrot.webm, is committed; scripts/make_video.sh
 (ffmpeg) remakes it. Its font, _pixel.ttf, is drawn here (pixel_font).
 
-Packages written (see SPEC.md section 1 for the formats):
+Packages written:
   fixtures/sample.apkg              current format: collection.anki21b (zstd, schema 18),
                                     protobuf media map, zstd media, plus the dummy anki2
   fixtures/legacy-anki2.apkg        Anki 2.0/2.1 legacy: collection.anki2 (schema 11), JSON map
