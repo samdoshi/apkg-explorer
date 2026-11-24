@@ -1,4 +1,4 @@
-import { ArrowRight, FileArchive, FolderOpen, ShieldCheck, Sparkles } from 'lucide-react'
+import { ArrowRight, CodeXml, FileArchive, FolderOpen, ShieldCheck, Sparkles } from 'lucide-react'
 import { useId, useRef, useState, type ChangeEvent } from 'react'
 import { Link } from 'react-router'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -125,10 +125,25 @@ export function StartScreen() {
         )}
       </div>
 
-      <p className="flex items-center justify-center gap-2 text-center text-sm text-muted-foreground">
-        <ShieldCheck className="size-4 shrink-0" aria-hidden="true" />
-        Your file stays on this device. Nothing is uploaded or saved.
-      </p>
+      <div className="space-y-3 text-center text-sm text-muted-foreground">
+        <p className="flex items-center justify-center gap-2">
+          <ShieldCheck className="size-4 shrink-0" aria-hidden="true" />
+          Your file stays on this device. Nothing is uploaded or saved.
+        </p>
+        <p>
+          {/* A new tab, so a file that's open here stays open. */}
+          <a
+            href="https://github.com/samdoshi/apkg-explorer"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-sm underline decoration-muted-foreground/50 underline-offset-4 outline-none hover:text-foreground hover:decoration-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <CodeXml className="size-4 shrink-0" aria-hidden="true" />
+            Source code on GitHub
+            <span className="sr-only"> (opens in a new tab)</span>
+          </a>
+        </p>
+      </div>
     </div>
   )
 }
